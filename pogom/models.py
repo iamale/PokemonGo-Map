@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 args = get_args()
 flaskDb = FlaskDB()
 
-db_schema_version = 7
+db_schema_version = 8
 
 
 class MyRetryDB(RetryOperationalError, PooledMySQLDatabase):
@@ -461,6 +461,7 @@ class MainWorker(BaseModel):
 
 class WorkerStatus(BaseModel):
     username = CharField(primary_key=True, max_length=50)
+    proxy = CharField()
     worker_name = CharField()
     success = IntegerField()
     fail = IntegerField()
@@ -982,5 +983,10 @@ def database_migrate(db, old_ver):
     if old_ver < 7:
         migrate(
             migrator.drop_column('gymdetails', 'description'),
-            migrator.add_column('gymdetails', 'description', TextField(null=True, default=""))
+            migrator.add_column('gymdetails', 'description', TextField(null=True, default="")),
+        )
+
+    if old_ver < 8:
+        migrate(
+            migrator.add_column('workerstatus', 'proxy', CharField(null=True, default=""))
         )

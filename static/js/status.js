@@ -62,6 +62,9 @@ function addTable (hash) {
     <div class="status_table" id="table_${hash}">
       <div class="status_row header">
         <div class="status_cell">
+          Proxy
+        </div>      
+        <div class="status_cell">
           Username
         </div>
         <div class="status_cell">
@@ -119,6 +122,7 @@ function processMainWorker (i, worker) {
 function addWorker (mainWorkerHash, workerHash) {
   var row = `
     <div id="row_${workerHash}" class="status_row">
+      <div id="proxy_${workerHash}" class="status_cell"/>
       <div id="username_${workerHash}" class="status_cell"/>
       <div id="success_${workerHash}"  class="status_cell"/>
       <div id="fail_${workerHash}"     class="status_cell"/>
@@ -159,6 +163,7 @@ function processWorker (i, worker) {
     monthArray[lastModified.getMonth()] + ' ' +
     lastModified.getFullYear()
 
+  $('#proxy_' + hash).html(worker['proxy'])
   $('#username_' + hash).html(worker['username'])
   $('#success_' + hash).html(worker['success'])
   $('#fail_' + hash).html(worker['fail'])
