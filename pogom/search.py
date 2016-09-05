@@ -240,7 +240,7 @@ def worker_status_db_thread(threads_status, name, db_updates_queue):
                     'method': status['method'],
                     'last_modified': datetime.utcnow()
                 }
-                
+
             if status['type'] == 'Worker':
                 workers[status['user']] = {
                     'username': status['user'],
