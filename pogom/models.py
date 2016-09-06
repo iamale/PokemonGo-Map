@@ -983,7 +983,7 @@ def database_migrate(db, old_ver):
     if old_ver < 7:
         migrate(
             migrator.drop_column('gymdetails', 'description'),
-            migrator.add_column('gymdetails', 'description', TextField(null=True, default="")),
+            migrator.add_column('gymdetails', 'description', TextField(null=True, default=""))
         )
 
     if old_ver < 8:
