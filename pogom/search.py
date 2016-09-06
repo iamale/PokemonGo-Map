@@ -320,7 +320,7 @@ def search_overseer_thread(args, method, new_location_queue, pause_bit, encrypti
         if args.proxy:
             proxy_display = proxy_url = args.proxy[i % len(args.proxy)]
             if args.proxy_display.upper() != 'FULL':
-                proxy_display = i % len(args.proxy)
+                proxy_display = str(i % len(args.proxy))
 
         workerId = 'Worker {:03}'.format(i)
         threadStatus[workerId] = {
