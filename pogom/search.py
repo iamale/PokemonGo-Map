@@ -244,7 +244,7 @@ def worker_status_db_thread(threads_status, name, db_updates_queue):
             if status['type'] == 'Worker':
                 workers[status['user']] = {
                     'username': status['user'],
-                    'proxy': str(status['proxy_display']) if status['proxy_display'] or isinstance(status['proxy_display'], int) else 'No',
+                    'proxy': str(status['proxy_display']),
                     'worker_name': name,
                     'success': status['success'],
                     'fail': status['fail'],
