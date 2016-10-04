@@ -1274,4 +1274,3 @@ def database_migrate(db, old_ver):
         migrate(
             migrator.add_column('workerstatus', 'proxy', CharField(null=True, default=""))
         )
-        
