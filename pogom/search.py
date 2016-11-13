@@ -24,6 +24,7 @@ import random
 import time
 import geopy
 import geopy.distance
+import requests
 
 from datetime import datetime
 from threading import Thread
@@ -438,12 +439,47 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'failures'})
                     break  # exit this loop to get a new account and have the API recreated
 
+                if consecutive_empties >= 2:
+                    captcha_url = captcha_request(api)
+
+                    if len(captcha_url) > 1:
+                        if args.captcha_solving:
+                            status['message'] = 'Account {} is encountering a captcha, starting 2captcha sequence'.format(account['username'])
+                            log.warning(status['message'])
+                            captcha_token = token_request(args, status, captcha_url)
+
+                            if 'ERROR' in captcha_token:
+                                log.warning("Unable to resolve captcha, please check your 2captcha API key and/or wallet balance")
+                                account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'catpcha failed to verify'})
+                                break
+
+                            else:
+                                status['message'] = 'Retrieved captcha token, attempting to verify challenge for {}'.format(account['username'])
+                                log.info(status['message'])
+                                response = api.verify_challenge(token=captcha_token)
+
+                                if 'success' in response['responses']['VERIFY_CHALLENGE']:
+                                    status['message'] = "Account {} successfully uncaptcha'd".format(account['username'])
+                                    log.info(status['message'])
+
+                                else:
+                                    status['message'] = "Account {} failed verifyChallenge, putting away account for now".format(account['username'])
+                                    log.info(status['message'])
+                                    account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'catpcha failed to verify'})
+                                    break
+                                time.sleep(1)
+                        else:
+                            status['message'] = 'Account {} empty more than 2 scans and is encountering captcha. Switching accounts...'.format(account['username'], args.max_empties)
+                            log.warning(status['message'])
+                            account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'captcha'})
+                            time.sleep(1)
+                            break
                 if consecutive_empties >= args.max_empties:
                     status['message'] = 'Account {} empty more than {} scans; possibly encountering captcha. Switching accounts...'.format(account['username'], args.max_empties)
                     log.warning(status['message'])
                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'captcha'})
-                    time.sleep(5)  # Give the thread a few seconds to push the message to db
-                    break  # exit this loop to get a new account and have the API recreated
+                    time.sleep(1)
+                    break
 
                 while pause_bit.is_set():
                     status['message'] = 'Scanning paused'
@@ -667,6 +703,33 @@ def gym_request(api, position, gym):
     except Exception as e:
         log.warning('Exception while downloading gym details: %s', e)
         return False
+
+
+def captcha_request(api):
+    response = api.check_challenge()
+    captcha_url = response['responses']['CHECK_CHALLENGE']['challenge_url']
+    return captcha_url
+
+
+def token_request(args, status, url):
+    s = requests.Session()
+    # Fetch the CAPTCHA_ID from 2captcha
+    try:
+        captcha_id = s.post("http://2captcha.com/in.php?key={}&method=userrecaptcha&googlekey={}&pageurl={}".format(args.captcha_key, args.captcha_dsk, url)).text.split('|')[1]
+        captcha_id = str(captcha_id)
+    # IndexError implies that the retuned response was a 2captcha error
+    except IndexError:
+        return 'ERROR'
+    status['message'] = 'Retrieved captcha ID: {}; now retrieving token'.format(captcha_id)
+    log.info(status['message'])
+    # Get the response, retry every 5 seconds if its not ready
+    recaptcha_response = s.get("http://2captcha.com/res.php?key={}&action=get&id={}".format(args.captcha_key, captcha_id)).text
+    while 'CAPCHA_NOT_READY' in recaptcha_response:
+        log.info("Captcha token is not ready, retrying in 5 seconds")
+        time.sleep(5)
+        recaptcha_response = s.get("http://2captcha.com/res.php?key={}&action=get&id={}".format(args.captcha_key, captcha_id)).text
+    token = str(recaptcha_response.split('|')[1])
+    return token
 
 
 def calc_distance(pos1, pos2):
