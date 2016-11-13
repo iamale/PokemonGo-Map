@@ -439,12 +439,11 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'failures'})
                     break  # exit this loop to get a new account and have the API recreated
 
-                if args.captcha_solving:
+                if consecutive_empties >= 2:
+                    captcha_url = captcha_request(api)
 
-                    if consecutive_empties >= 2:
-                        captcha_url = captcha_request(api)
-
-                        if len(captcha_url) > 1:
+                    if len(captcha_url) > 1:
+                        if args.captcha_solving:
                             status['message'] = 'Account {} is encountering a captcha, starting 2captcha sequence'.format(account['username'])
                             log.warning(status['message'])
                             captcha_token = token_request(args, status, captcha_url)
@@ -469,6 +468,18 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'catpcha failed to verify'})
                                     break
                                 time.sleep(1)
+                        else:
+                            status['message'] = 'Account {} empty more than 2 scans and is encountering captcha. Switching accounts...'.format(account['username'], args.max_empties)
+                            log.warning(status['message'])
+                            account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'captcha'})
+                            time.sleep(1)
+                            break
+                if consecutive_empties >= args.max_empties:
+                    status['message'] = 'Account {} empty more than {} scans; possibly encountering captcha. Switching accounts...'.format(account['username'], args.max_empties)
+                    log.warning(status['message'])
+                    account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'captcha'})
+                    time.sleep(1)
+                    break
 
                 while pause_bit.is_set():
                     status['message'] = 'Scanning paused'
