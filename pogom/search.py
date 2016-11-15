@@ -558,18 +558,18 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                     log.info(status['message'])
                                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'catpcha failed to verify'})
                                     break
-                                time.sleep(1)
+                                time.sleep(5)
                         else:
                             status['message'] = 'Account {} empty more than 2 scans and is encountering captcha. Switching accounts...'.format(account['username'], args.max_empties)
                             log.warning(status['message'])
-                            account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'captcha'})
-                            time.sleep(1)
+                            account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'captcha received'})
+                            time.sleep(5)
                             break
                 if consecutive_empties >= args.max_empties:
                     status['message'] = 'Account {} empty more than {} scans; possibly encountering captcha. Switching accounts...'.format(account['username'], args.max_empties)
                     log.warning(status['message'])
-                    account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'captcha'})
-                    time.sleep(1)
+                    account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'consecutive empties'})
+                    time.sleep(5)
                     break
 
                 while pause_bit.is_set():
@@ -739,7 +739,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
 
         # catch any process exceptions, log them, and continue the thread
         except Exception as e:
-            status['message'] = 'Exception in search_worker using account {}. Restarting with fresh account. See logs for details.'.format(account['username'])
+            status['message'] = 'Exception in search_worker using account {}: {}'.format(account['username'], e)
             time.sleep(args.scan_delay)
             log.error('Exception in search_worker under account {} Exception message: {}'.format(account['username'], e))
             account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'exception'})
