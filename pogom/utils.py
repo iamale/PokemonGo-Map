@@ -64,6 +64,8 @@ def get_args():
                         help='Seconds for accounts to rest when they fail or are switched out')
     parser.add_argument('-ac', '--accountcsv',
                         help='Load accounts from CSV file containing "auth_service,username,passwd" lines')
+    parser.add_argument('-bh', '--beehive',
+                        help='Use beehive configuration for multiple accounts, one account per hex.  Make sure to keep -st under 5, and -w under the total amount of accounts available', action='store_true', default=False)
     parser.add_argument('-l', '--location', type=parse_unicode,
                         help='Location, can be an address or coordinates')
     parser.add_argument('-j', '--jitter', help='Apply random -9m to +9m jitter to location',
@@ -182,6 +184,8 @@ def get_args():
                         action='store_true', default=False)
     parser.add_argument('--disable-clean', help='Disable clean db loop',
                         action='store_true', default=False)
+    parser.add_argument('-ctd', '--clean-timers-data', help='Set previous spawns as unvalid for new disappear_time prediction',
+                        action='store_true', default=False)
     parser.add_argument('--webhook-updates-only', help='Only send updates (pokémon & lured pokéstops)',
                         action='store_true', default=False)
     parser.add_argument('--wh-threads', help='Number of webhook threads; increase if the webhook queue falls behind',
@@ -194,6 +198,12 @@ def get_args():
                         help='Enable status page database update using STATUS_NAME as main worker name')
     parser.add_argument('-spp', '--status-page-password', default=None,
                         help='Set the status page password')
+    parser.add_argument('-sl', '--speed-limit',
+                        help='If next scan would cause the account to move above specified speed in kmph in a straight line, sleep until such time that it could reasonably move that distance',
+                        type=int, default=0)
+    parser.add_argument('-msld', '--max-speed-limit-delay',
+                        help='Maximum time in seconds to delay when trying to stay under the speed limit',
+                        type=int, default=0)
     parser.add_argument('-el', '--encrypt-lib', help='Path to encrypt lib to be used instead of the shipped ones')
     parser.add_argument('-odt', '--on-demand_timeout', help='Pause searching while web UI is inactive for this timeout(in seconds)', type=int, default=0)
     verbosity = parser.add_mutually_exclusive_group()
@@ -330,6 +340,12 @@ def get_args():
             if num_auths > 1 and num_usernames != num_auths:
                 errors.append('The number of provided auth ({}) must match the username count ({})'.format(num_auths, num_usernames))
 
+        if args.speed_limit < 0:
+            errors.append('Speed limit cannot be less than 0')
+
+        if args.max_speed_limit_delay < 0:
+            errors.append('Maximum delay due to speed limit cannot be less than 0')
+
         if len(errors) > 0:
             parser.print_usage()
             print(sys.argv[0] + ": errors: \n - " + "\n - ".join(errors))
@@ -430,6 +446,34 @@ def get_pokemon_rarity(pokemon_id):
 def get_pokemon_types(pokemon_id):
     pokemon_types = get_pokemon_data(pokemon_id)['types']
     return map(lambda x: {"type": i8ln(x['type']), "color": x['color']}, pokemon_types)
+
+
+def get_moves_data(move_id):
+    if not hasattr(get_moves_data, 'moves'):
+        file_path = os.path.join(
+            config['ROOT_PATH'],
+            config['DATA_DIR'],
+            'moves.min.json')
+
+        with open(file_path, 'r') as f:
+            get_moves_data.moves = json.loads(f.read())
+    return get_moves_data.moves[str(move_id)]
+
+
+def get_move_name(move_id):
+    return i8ln(get_moves_data(move_id)['name'])
+
+
+def get_move_damage(move_id):
+    return i8ln(get_moves_data(move_id)['damage'])
+
+
+def get_move_energy(move_id):
+    return i8ln(get_moves_data(move_id)['energy'])
+
+
+def get_move_type(move_id):
+    return i8ln(get_moves_data(move_id)['type'])
 
 
 class Timer():
