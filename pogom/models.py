@@ -1274,4 +1274,4 @@ def database_migrate(db, old_ver):
     if old_ver < 10:
         migrate(
             migrator.add_column('workerstatus', 'captchas', IntegerField(default=0))
-        ) 
+        )
