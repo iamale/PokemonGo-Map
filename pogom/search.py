@@ -156,7 +156,7 @@ def status_printer(threadStatus, search_items_queue, db_updates_queue, wh_queue,
                         proxylen = max(proxylen, len(str(threadStatus[item]['proxy_display'])))
 
             # How pretty.
-            status = '{:10} | {:5} | {:' + str(userlen) + '} | {:' + str(proxylen) + '} | {:7} | {:6} | {:5} | {:7} | {:10}'
+            status = '{:10} | {:5} | {:' + str(userlen) + '} | {:' + str(proxylen) + '} | {:7} | {:6} | {:5} | {:7} | {:7} | {:10}'
 
             # Print the worker status.
             status_text.append(status.format('Worker ID', 'Start', 'User', 'Proxy', 'Success', 'Failed', 'Empty', 'Skipped', 'Captchas', 'Message'))
@@ -314,7 +314,6 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
             proxy_display = proxy_url = args.proxy[i % len(args.proxy)]
             if args.proxy_display.upper() != 'FULL':
                 proxy_display = i % len(args.proxy)
-
         workerId = 'Worker {:03}'.format(i)
         threadStatus[workerId] = {
             'type': 'Worker',
@@ -330,7 +329,6 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
             'location': False,
             'last_scan_time': 0,
         }
-
         t = Thread(target=search_worker_thread,
                    name='search-worker-{}'.format(i),
                    args=(args, account_queue, account_failures, search_items_queue, pause_bit,
