@@ -314,6 +314,7 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
             proxy_display = proxy_url = args.proxy[i % len(args.proxy)]
             if args.proxy_display.upper() != 'FULL':
                 proxy_display = i % len(args.proxy)
+
         workerId = 'Worker {:03}'.format(i)
         threadStatus[workerId] = {
             'type': 'Worker',
@@ -329,6 +330,7 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
             'location': False,
             'last_scan_time': 0,
         }
+
         t = Thread(target=search_worker_thread,
                    name='search-worker-{}'.format(i),
                    args=(args, account_queue, account_failures, search_items_queue, pause_bit,
