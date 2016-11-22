@@ -42,7 +42,7 @@ from .utils import now
 from .transform import get_new_coords
 import schedulers
 
-from .proxy import get_new_proxy
+from .proxy import get_new_proxy, test_proxy
 
 import terminalsize
 
@@ -530,9 +530,32 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                         status['proxy_display'] = status['proxy_url']
 
             if status['proxy_url']:
-                log.debug("Using proxy %s", status['proxy_url'])
                 api.set_proxy({'http': status['proxy_url'], 'https': status['proxy_url']})
-
+                
+                # todo: test proxy to make sure it is ok before entering the forever loop
+                step, step_location, appears, leaves = search_items_queue.get()
+                
+                proxy_test = test_proxy(args, account, step_location, api, status['proxy_url'])
+                
+                log.debug("Proxy test for %s returned %r", status['proxy_url'], proxy_test)
+                
+                if (not proxy_test):
+                    log.debug("Proxy %s is not working. Switching proxies...", status['proxy_url'])
+                    
+                    status['message'] = 'Proxy {} is not working. Switching proxies...'.format(status['proxy_url'])
+                    log.warning(status['message'])
+                    account_queue.put(account)  # experimantal, nobody did this before :)
+                    
+                    search_items_queue.task_done()
+                    search_items_queue.put((step, step_location, appears, leaves))
+                    status['proxy_url'] = False
+                    continue  # rewind to the begining of this loop to get a new account and have the API recreated
+                else:
+                    log.debug("Using proxy %s", status['proxy_url'])
+                    
+                    search_items_queue.task_done()
+                    search_items_queue.put((step, step_location, appears, leaves))
+                
             # The forever loop for the searches.
             while True:
             
