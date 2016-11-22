@@ -9,6 +9,10 @@ import time
 from queue import Queue
 from threading import Thread
 from random import randint
+import geocoder
+
+from pgoapi import PGoApi
+from pgoapi.exceptions import AuthException
 
 log = logging.getLogger(__name__)
 
@@ -123,7 +127,7 @@ def check_proxies(args):
 
     log.info('Checking %d proxies...', total_proxies)
     if (total_proxies > 10):
-        log.info('Enable "-d/--debug" to see checking details.')
+        log.info('Enable "-d/--debug" to see proxy checking details.')
 
     proxies = []
 
@@ -136,7 +140,7 @@ def check_proxies(args):
         t.daemon = True
         t.start()
 
-    # This is painful but we need to wait here untill proxy_queue is completed so we have a working list of proxies.
+    # This is painful but we need to wait here until proxy_queue is completed so we have a working list of proxies.
     proxy_queue.join()
 
     working_proxies = len(proxies)
@@ -189,7 +193,37 @@ def get_new_proxy(args):
         lp = randint(0, len(args.proxy) - 1)
     # If random - get random one
     else:
-        log.warning('Parameter -pxo/--proxy-rotation has wrong value! Use only first proxy!')
+        log.warning('Parameter -pxr/--proxy-rotation has wrong value! Use only first proxy!')
         lp = 0
 
     return lp, args.proxy[lp]
+
+def test_proxy(args, account, step_location, api, proxy):
+    
+    # Get the actual altitude of step_location
+    altitude = geocoder.elevation([step_location[0], step_location[1]])
+    step_location = (step_location[0], step_location[1], altitude.meters)
+
+    # Let the api know where we intend to be for this loop.
+    # Doing this before check_login so it does not also have to be done there
+    # when the auth token is refreshed.
+    api.set_position(*step_location)
+
+    log.debug('Testing proxy %s with account %s', proxy, account['username'])
+
+    # Try to login. (a few times, but don't get stuck here)
+    i = 0
+    while i < args.login_retries:
+        try:
+            api.set_authentication(provider=account['auth_service'], username=account['username'], password=account['password'], proxy_config={'http': proxy, 'https': proxy})
+            break
+        except AuthException:
+            if i >= args.login_retries:
+                return False
+            else:
+                i += 1
+                log.debug('Login attempt %g failed with account %s using proxy %s.', i, account['username'], proxy)
+                time.sleep(args.login_delay)
+
+    return True
+    
