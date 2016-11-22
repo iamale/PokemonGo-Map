@@ -1393,7 +1393,9 @@ function centerMapOnLocation () {
     } else {
       imgX = '-18'
     }
-    currentLocation.style.backgroundPosition = imgX + 'px 0'
+    if(currentLocation != null) {
+      currentLocation.style.backgroundPosition = imgX + 'px 0'
+    }
   }, 500)
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(function (position) {
