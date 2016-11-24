@@ -24,6 +24,7 @@ import random
 import time
 import geopy
 import geopy.distance
+import geocoder
 import requests
 
 from datetime import datetime
@@ -40,6 +41,8 @@ from .fakePogoApi import FakePogoApi
 from .utils import now
 from .transform import get_new_coords
 import schedulers
+
+from .proxy import get_new_proxy, test_proxy
 
 import terminalsize
 
@@ -161,10 +164,10 @@ def status_printer(threadStatus, search_items_queue_array, db_updates_queue, wh_
                         proxylen = max(proxylen, len(str(threadStatus[item]['proxy_display'])))
 
             # How pretty.
-            status = '{:10} | {:5} | {:' + str(userlen) + '} | {:' + str(proxylen) + '} | {:7} | {:6} | {:5} | {:7} | {:10}'
+            status = '{:10} | {:5} | {:' + str(userlen) + '} | {:' + str(proxylen) + '} | {:7} | {:6} | {:5} | {:7} | {:7} | {:10}'
 
             # Print the worker status.
-            status_text.append(status.format('Worker ID', 'Start', 'User', 'Proxy', 'Success', 'Failed', 'Empty', 'Skipped', 'Message'))
+            status_text.append(status.format('Worker ID', 'Start', 'User', 'Proxy', 'Success', 'Failed', 'Empty', 'Skipped', 'Captchas', 'Message'))
             for item in sorted(threadStatus):
                 if(threadStatus[item]['type'] == 'Worker'):
                     current_line += 1
@@ -175,7 +178,7 @@ def status_printer(threadStatus, search_items_queue_array, db_updates_queue, wh_
                     if current_line > end_line:
                         break
 
-                    status_text.append(status.format(item, time.strftime('%H:%M', time.localtime(threadStatus[item]['starttime'])), threadStatus[item]['user'], threadStatus[item]['proxy_display'], threadStatus[item]['success'], threadStatus[item]['fail'], threadStatus[item]['noitems'], threadStatus[item]['skip'], threadStatus[item]['message']))
+                    status_text.append(status.format(item, time.strftime('%H:%M', time.localtime(threadStatus[item]['starttime'])), threadStatus[item]['user'], threadStatus[item]['proxy_display'], threadStatus[item]['success'], threadStatus[item]['fail'], threadStatus[item]['noitems'], threadStatus[item]['skip'], threadStatus[item]['captchas'], threadStatus[item]['message']))
 
         elif display_type[0] == 'failedaccounts':
             status_text.append('-----------------------------------------')
@@ -212,7 +215,7 @@ def account_recycler(accounts_queue, account_failures, args):
         # Create a new copy of the failure list to search through, so we can iterate through it without it changing.
         failed_temp = list(account_failures)
 
-        # Search through the list for any item that last failed before 2 hours ago.
+        # Search through the list for any item that last failed before -ari/--account-rest-interval seconds
         ok_time = now() - args.account_rest_interval
         for a in failed_temp:
             if a['last_fail_time'] <= ok_time:
@@ -249,6 +252,7 @@ def worker_status_db_thread(threads_status, name, db_updates_queue):
                     'fail': status['fail'],
                     'no_items': status['noitems'],
                     'skip': status['skip'],
+                    'captchas': status['captchas'],
                     'last_modified': datetime.utcnow(),
                     'message': status['message']
                 }
@@ -331,7 +335,7 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
         # Set proxy for each worker, using round robin.
         proxy_display = 'No'
         proxy_url = False
-
+        
         if args.proxy:
             proxy_display = proxy_url = args.proxy[i % len(args.proxy)]
             if args.proxy_display.upper() != 'FULL':
@@ -345,6 +349,7 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
             'fail': 0,
             'noitems': 0,
             'skip': 0,
+            'captchas': 0,
             'user': '',
             'proxy_display': proxy_display,
             'proxy_url': proxy_url,
@@ -362,6 +367,7 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
 
     # A place to track the current location.
     current_location = False
+
 
     # The real work starts here but will halt on pause_bit.set().
     while True:
@@ -411,10 +417,70 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
                         threadStatus['Overseer']['message'] += ' ({}s ahead)'.format(nextitem[2] - now())
                     else:
                         threadStatus['Overseer']['message'] += ' ({}s behind)'.format(now() - nextitem[2])
-
+                        
         # Now we just give a little pause here.
         time.sleep(1)
 
+# Generates the list of locations to scan
+def _generate_locations(current_location, step_distance, step_limit, worker_count):
+    NORTH = 0
+    EAST = 90
+    SOUTH = 180
+    WEST = 270
+
+    xdist = math.sqrt(3) * step_distance  # dist between column centers
+    ydist = 3 * (step_distance / 2)  # dist between row centers
+
+    results = []
+
+    results.append((current_location[0], current_location[1], 0))
+
+    loc = current_location
+    ring = 1
+
+    while len(results) < worker_count:
+
+        loc = get_new_coords(loc, ydist * (step_limit - 1), NORTH)
+        loc = get_new_coords(loc, xdist * (1.5 * step_limit - 0.5), EAST)
+        results.append((loc[0], loc[1], 0))
+
+        for i in range(ring):
+            loc = get_new_coords(loc, ydist * step_limit, NORTH)
+            loc = get_new_coords(loc, xdist * (1.5 * step_limit - 1), WEST)
+            results.append((loc[0], loc[1], 0))
+
+        for i in range(ring):
+            loc = get_new_coords(loc, ydist * (step_limit - 1), SOUTH)
+            loc = get_new_coords(loc, xdist * (1.5 * step_limit - 0.5), WEST)
+            results.append((loc[0], loc[1], 0))
+
+        for i in range(ring):
+            loc = get_new_coords(loc, ydist * (2 * step_limit - 1), SOUTH)
+            loc = get_new_coords(loc, xdist * 0.5, WEST)
+            results.append((loc[0], loc[1], 0))
+
+        for i in range(ring):
+            loc = get_new_coords(loc, ydist * (step_limit), SOUTH)
+            loc = get_new_coords(loc, xdist * (1.5 * step_limit - 1), EAST)
+            results.append((loc[0], loc[1], 0))
+
+        for i in range(ring):
+            loc = get_new_coords(loc, ydist * (step_limit - 1), NORTH)
+            loc = get_new_coords(loc, xdist * (1.5 * step_limit - 0.5), EAST)
+            results.append((loc[0], loc[1], 0))
+
+        # Back to start
+        for i in range(ring - 1):
+            loc = get_new_coords(loc, ydist * (2 * step_limit - 1), NORTH)
+            loc = get_new_coords(loc, xdist * 0.5, EAST)
+            results.append((loc[0], loc[1], 0))
+
+        loc = get_new_coords(loc, ydist * (2 * step_limit - 1), NORTH)
+        loc = get_new_coords(loc, xdist * 0.5, EAST)
+
+        ring += 1
+
+    return results
 
 # Generates the list of locations to scan
 def _generate_locations(current_location, step_distance, step_limit, worker_count):
@@ -503,12 +569,15 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
             status['success'] = 0
             status['noitems'] = 0
             status['skip'] = 0
+            status['captchas'] = 0
             status['location'] = False
             status['last_scan_time'] = 0
 
             # Only sleep when consecutive_fails reaches max_failures, overall fails for stat purposes.
             consecutive_fails = 0
-            consecutive_empties = 0
+
+            # sleep when consecutive_noitems reaches max_empty, overall noitems for stat purposes
+            consecutive_noitems = 0
 
             # Create the API instance this will use.
             if args.mock != '':
@@ -516,23 +585,68 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
             else:
                 api = PGoApi()
 
-            if status['proxy_url']:
-                log.debug("Using proxy %s", status['proxy_url'])
-                api.set_proxy({'http': status['proxy_url'], 'https': status['proxy_url']})
+            # New account - new proxy
+            if args.proxy:
+                # If proxy is not assigned yet or if proxy-rotation is defined - query for new proxy
+                if (not status['proxy_url']) or \
+                   ((args.proxy_rotation is not None) and (args.proxy_rotation != 'none')):
 
+                    proxy_num, status['proxy_url'] = get_new_proxy(args)
+                    if args.proxy_display.upper() != 'FULL':
+                        status['proxy_display'] = proxy_num
+                    else:
+                        status['proxy_display'] = status['proxy_url']
+
+            if status['proxy_url']:
+                api.set_proxy({'http': status['proxy_url'], 'https': status['proxy_url']})
+                
+                # todo: test proxy to make sure it is ok before entering the forever loop
+                step, step_location, appears, leaves = search_items_queue.get()
+                
+                proxy_test = test_proxy(args, account, step_location, api, status['proxy_url'])
+                
+                log.debug("Proxy test for %s returned %r", status['proxy_url'], proxy_test)
+                
+                if (not proxy_test):
+                    log.debug("Proxy %s is not working. Switching proxies...", status['proxy_url'])
+                    
+                    status['message'] = 'Proxy {} is not working. Switching proxies...'.format(status['proxy_url'])
+                    log.warning(status['message'])
+                    account_queue.put(account)  # experimantal, nobody did this before :)
+                    
+                    search_items_queue.task_done()
+                    search_items_queue.put((step, step_location, appears, leaves))
+                    status['proxy_url'] = False
+                    continue  # rewind to the begining of this loop to get a new account and have the API recreated
+                else:
+                    log.debug("Using proxy %s", status['proxy_url'])
+                    
+                    search_items_queue.task_done()
+                    search_items_queue.put((step, step_location, appears, leaves))
+                
             # The forever loop for the searches.
             while True:
-
+            
                 # If this account has been messing up too hard, let it rest.
                 if consecutive_fails >= args.max_failures:
                     status['message'] = 'Account {} failed more than {} scans; possibly bad account. Switching accounts...'.format(account['username'], args.max_failures)
                     log.warning(status['message'])
                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'failures'})
                     break  # Exit this loop to get a new account and have the API recreated.
+                
+                # If this account had not find anything for too long, let it rest
+                if (args.max_empty > 0) and (consecutive_noitems >= args.max_empty):
+                    status['message'] = 'Account {} returned empty scan for more than {} scans; Possibly IP is banned. Switching accounts...'.format(account['username'], args.max_empty)
+                    log.warning(status['message'])
+                    account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'empty scans'})
+                    break  # exit this loop to get a new account and have the API recreated
 
-                while pause_bit.is_set():
-                    status['message'] = 'Scanning paused'
-                    time.sleep(2)
+                # If used proxy disappears from "live list" after background checking - switch account but DO not freeze it (it's not an account failure)
+                if (args.proxy) and (not status['proxy_url'] in args.proxy):
+                    status['message'] = 'Account {} proxy {} is not in a live list any more. Switching accounts...'.format(account['username'], status['proxy_url'])
+                    log.warning(status['message'])
+                    account_queue.put(account)  # experimantal, nobody did this before :)
+                    break  # exit this loop to get a new account and have the API recreated
 
                 # If this account has been running too long, let it rest.
                 if (args.account_search_interval is not None):
@@ -541,6 +655,10 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                         log.info(status['message'])
                         account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'rest interval'})
                         break
+                        
+                while pause_bit.is_set():
+                    status['message'] = 'Scanning paused'
+                    time.sleep(2)
 
                 # Grab the next thing to search (when available).
                 status['message'] = 'Waiting for item from queue'
@@ -564,22 +682,46 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                         search_items_queue.task_done()
                         continue
 
-                # Too late?
-                if leaves and now() > (leaves - args.min_seconds_left):
+                # too late?
+                extra_delay = check_speed_limit(args, status['location'], step_location, status['last_scan_time'])
+                continue_time = time.time() + extra_delay
+
+                if leaves and continue_time > (leaves - args.min_seconds_left):
                     search_items_queue.task_done()
                     status['skip'] += 1
-                    # It is slightly silly to put this in status['message'] since it'll be overwritten very shortly after. Oh well.
-                    status['message'] = 'Too late for location {:6f},{:6f}; skipping'.format(step_location[0], step_location[1])
+                    # it is slightly silly to put this in status['message'] since it'll be overwritten very shortly after. Oh well.
+                    if time.time() > (leaves - args.min_seconds_left):
+                        status['message'] = 'Too late for location {:6f},{:6f}; skipping'.format(step_location[0], step_location[1])
+                    else:
+                        status['message'] = 'Skipping {:6f},{:6f}; outside time and speed constraints'.format(step_location[0], step_location[1])
+
                     log.info(status['message'])
                     # No sleep here; we've not done anything worth sleeping for. Plus we clearly need to catch up!
                     continue
+                    
+                # too fast?
+                if extra_delay:
+                    status['message'] = 'Too fast for {:6f},{:6f}; waiting {}s...'.format(step_location[0], step_location[1], extra_delay)
+                    log.info(status['message'])
+                    continue_time = time.time() + extra_delay
+
+                    while time.time() < continue_time:
+                        time.sleep(1)
+                        remain = int(continue_time - time.time())
+                        if remain:
+                            status['message'] = 'Too fast for {:6f},{:6f}; waiting {}s...'.format(step_location[0], step_location[1], remain)
+
+                # Get the actual altitude of step_location
+                altitude = geocoder.elevation([step_location[0], step_location[1]])
+                step_location = (step_location[0], step_location[1], altitude.meters)
 
                 # Let the api know where we intend to be for this loop.
                 # Doing this before check_login so it does not also have to be done there
                 # when the auth token is refreshed.
                 api.set_position(*step_location)
 
-                # Ok, let's get started -- check our login status.
+                # Ok, let's get started -- check our login status
+                status['message'] = 'Logging in...'
                 check_login(args, account, api, step_location, status['proxy_url'])
 
                 # Putting this message after the check_login so the messages aren't out of order.
@@ -593,6 +735,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                 if not response_dict:
                     status['fail'] += 1
                     consecutive_fails += 1
+                    # consecutive_noitems = 0 - I propose to leave noitems counter in case of error
                     status['message'] = 'Invalid response at {:6f},{:6f}, abandoning location'.format(step_location[0], step_location[1])
                     log.error(status['message'])
                     time.sleep(args.scan_delay)
@@ -604,6 +747,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                     if args.captcha_solving:
                         captcha_url = response_dict['responses']['CHECK_CHALLENGE']['challenge_url']
                         if len(captcha_url) > 1:
+                            status['captchas'] += 1
                             status['message'] = 'Account {} is encountering a captcha, starting 2captcha sequence'.format(account['username'])
                             log.warning(status['message'])
                             captcha_token = token_request(args, status, captcha_url)
@@ -618,31 +762,36 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                 if 'success' in response['responses']['VERIFY_CHALLENGE']:
                                     status['message'] = "Account {} successfully uncaptcha'd".format(account['username'])
                                     log.info(status['message'])
+                                    
                                     # Make another request for the same coordinate since the previous one was captcha'd
                                     response_dict = map_request(api, step_location, args.jitter)
+
                                 else:
                                     status['message'] = "Account {} failed verifyChallenge, putting away account for now".format(account['username'])
                                     log.info(status['message'])
                                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'catpcha failed to verify'})
                                     break
 
+                    # Parse 'GET_MAP_OBJECTS'
                     parsed = parse_map(args, response_dict, step_location, dbq, whq, api)
                     search_items_queue.task_done()
                     if parsed['count'] > 0:
                         status['success'] += 1
-                        consecutive_empties = 0
+                        consecutive_noitems = 0
                     else:
                         status['noitems'] += 1
-                        consecutive_empties += 1
+                        consecutive_noitems += 1
                     consecutive_fails = 0
                     status['message'] = 'Search at {:6f},{:6f} completed with {} finds'.format(step_location[0], step_location[1], parsed['count'])
                     log.debug(status['message'])
-                except KeyError:
+                # except KeyError as e:
+                except Exception as e:
                     parsed = False
                     status['fail'] += 1
                     consecutive_fails += 1
+                    # consecutive_noitems = 0 - I propose to leave noitems counter in case of error
                     status['message'] = 'Map parse failed at {:6f},{:6f}, abandoning location. {} may be banned.'.format(step_location[0], step_location[1], account['username'])
-                    log.exception(status['message'])
+                    log.exception('{}. Exception message: {}'.format(status['message'], e))
 
                 # Get detailed information about gyms.
                 if args.gym_info and parsed:
@@ -676,7 +825,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                         log.debug(status['message'])
 
                         for gym in gyms_to_update.values():
-                            status['message'] = 'Getting details for gym {} of {} for location {},{}...'.format(current_gym, len(gyms_to_update), step_location[0], step_location[1])
+                            status['message'] = 'Getting details for gym {} of {} for location {:6f},{:6f}...'.format(current_gym, len(gyms_to_update), step_location[0], step_location[1])
                             time.sleep(random.random() + 2)
                             response = gym_request(api, step_location, gym)
 
@@ -689,7 +838,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                             # Increment which gym we're on. (for status messages)
                             current_gym += 1
 
-                        status['message'] = 'Processing details of {} gyms for location {},{}...'.format(len(gyms_to_update), step_location[0], step_location[1])
+                        status['message'] = 'Processing details of {} gyms for location {:6f},{:6f}...'.format(len(gyms_to_update), step_location[0], step_location[1])
                         log.debug(status['message'])
 
                         if gym_responses:
@@ -705,7 +854,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
 
         # Catch any process exceptions, log them, and continue the thread.
         except Exception as e:
-            status['message'] = 'Exception in search_worker using account {}. Restarting with fresh account. See logs for details.'.format(account['username'])
+            status['message'] = 'Exception in search_worker using account {}. View log files for details.'.format(account['username'])
             time.sleep(args.scan_delay)
             log.error('Exception in search_worker under account {} Exception message: {}'.format(account['username'], e))
             account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'exception'})
@@ -755,16 +904,12 @@ def map_request(api, position, jitter=False):
         cell_ids = util.get_cell_ids(scan_location[0], scan_location[1])
         timestamps = [0, ] * len(cell_ids)
         req = api.create_request()
+        
         response = req.get_map_objects(latitude=f2i(scan_location[0]),
                                        longitude=f2i(scan_location[1]),
                                        since_timestamp_ms=timestamps,
                                        cell_id=cell_ids)
-        response = req.check_challenge()
-        response = req.get_hatched_eggs()
-        response = req.get_inventory()
-        response = req.check_awarded_badges()
-        response = req.download_settings()
-        response = req.get_buddy_walked()
+
         response = req.call()
         return response
 
@@ -801,7 +946,7 @@ def token_request(args, status, url):
     s = requests.Session()
     # Fetch the CAPTCHA_ID from 2captcha.
     try:
-        captcha_id = s.post("http://2captcha.com/in.php?key={}&method=userrecaptcha&googlekey={}&pageurl={}".format(args.captcha_key, args.captcha_dsk, url)).text.split('|')[1]
+        captcha_id = s.post("http://2captcha.com/in.php?key={}&soft_id=1634&method=userrecaptcha&googlekey={}&pageurl={}".format(args.captcha_key, args.captcha_dsk, url)).text.split('|')[1]
         captcha_id = str(captcha_id)
     # IndexError implies that the retuned response was a 2captcha error.
     except IndexError:
@@ -832,6 +977,25 @@ def calc_distance(pos1, pos2):
     d = R * c
 
     return d
+
+def check_speed_limit(args, previous_location, next_location, last_scan_time):
+    if args.speed_limit > 0 and last_scan_time > 0:
+        move_distance = calc_distance(previous_location, next_location)
+        time_elapsed = time.time() - last_scan_time
+
+        if time_elapsed <= 0:
+            time_elapsed = 0.001
+        projected_speed = 3600.0 * move_distance / time_elapsed
+
+        if projected_speed > args.speed_limit:
+            extra_delay = int(move_distance / args.speed_limit * 3600.0 - time_elapsed) + 1
+
+            if args.max_speed_limit_delay and extra_delay > args.max_speed_limit_delay:
+                return args.max_speed_limit_delay
+            else:
+                return extra_delay
+
+    return 0
 
 
 # Delay each thread start time so that logins occur after delay.
