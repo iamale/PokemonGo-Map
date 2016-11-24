@@ -193,7 +193,7 @@ def get_new_proxy(args):
         lp = randint(0, len(args.proxy) - 1)
     # If random - get random one
     else:
-        log.warning('Parameter -pxr/--proxy-rotation has wrong value! Use only first proxy!')
+        log.warning('Parameter -pxo/--proxy-rotation has wrong value! Use only first proxy!')
         lp = 0
 
     return lp, args.proxy[lp]
@@ -222,7 +222,7 @@ def test_proxy(args, account, step_location, api, proxy):
                 return False
             else:
                 i += 1
-                log.debug('Login attempt %g failed with account %s using proxy %s.', i, account['username'], proxy)
+                log.debug('Login attempt %g failed with account %s using proxy %s. Trying again in %g seconds', i, account['username'], proxy, args.login_delay)
                 time.sleep(args.login_delay)
 
     return True
