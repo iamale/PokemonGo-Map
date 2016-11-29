@@ -583,7 +583,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                 check_login(args, account, api, step_location, status['proxy_url'])
 
                 # Putting this message after the check_login so the messages aren't out of order.
-                status['message'] = 'Searching at {:6f},{:6f}'.format(step_location[0], step_location[1])
+                status['message'] = 'Searching at {:6f},{:6f},{:6f}'.format(step_location[0], step_location[1], step_location[2])
                 log.info(status['message'])
 
                 # Make the actual request. (finally!)
@@ -755,16 +755,16 @@ def map_request(api, position, jitter=False):
         cell_ids = util.get_cell_ids(scan_location[0], scan_location[1])
         timestamps = [0, ] * len(cell_ids)
         req = api.create_request()
-        response = req.get_map_objects(latitude=f2i(scan_location[0]),
-                                       longitude=f2i(scan_location[1]),
-                                       since_timestamp_ms=timestamps,
-                                       cell_id=cell_ids)
         response = req.check_challenge()
         response = req.get_hatched_eggs()
         response = req.get_inventory()
         response = req.check_awarded_badges()
         response = req.download_settings()
         response = req.get_buddy_walked()
+        response = req.get_map_objects(latitude=f2i(scan_location[0]),
+                                       longitude=f2i(scan_location[1]),
+                                       since_timestamp_ms=timestamps,
+                                       cell_id=cell_ids)
         response = req.call()
         return response
 
