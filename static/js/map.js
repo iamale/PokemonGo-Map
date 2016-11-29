@@ -386,17 +386,17 @@ function pokemonLabel (name, rarity, types, disappearTime, id, latitude, longitu
   var timecontent = ''
 
   if (timedetail === 1) {
-    timecontent = `<div><span style="font-weight: bold; color: #3bb345">This time is secure. It has been received from the server.</span><br>
+    timecontent = `<div><span style="font-weight: bold; color: #3bb345">This time is secure.</span><br>
     Disappears at ${pad(disappearDate.getHours())}:${pad(disappearDate.getMinutes())}:${pad(disappearDate.getSeconds())}
     <span class='label-countdown' disappears-at='${disappearTime}'>(00m00s)</span>
     </div>`
   } else if (timedetail === 0) {
-    timecontent = `<div><span style="font-weight: bold; color: #bfbc27">This time is only a prediction. It may be wrong.</span><br>
+    timecontent = `<div>
     Disappears at ${pad(disappearDate.getHours())}:${pad(disappearDate.getMinutes())}:${pad(disappearDate.getSeconds())}
     <span class='label-countdown' disappears-at='${disappearTime}'>(00m00s)</span>
     </div>`
   } else if (timedetail === -1) {
-    timecontent = `<div><span style="font-weight: bold; color: #f1504e">Don't trust this time! It has been set manually to<br>30m when this pokemon has been encountered</span><br>
+    timecontent = `<div><span style="font-weight: bold; color: #f1504e">Don't trust this time!</span><br>
     Disappears at ${pad(disappearDate.getHours())}:${pad(disappearDate.getMinutes())}:${pad(disappearDate.getSeconds())}
     <span class='label-countdown' disappears-at='${disappearTime}'>(00m00s)</span>
     </div>`
@@ -1394,7 +1394,9 @@ function centerMapOnLocation () {
     } else {
       imgX = '-18'
     }
-    currentLocation.style.backgroundPosition = imgX + 'px 0'
+    if(currentLocation != null) {
+      currentLocation.style.backgroundPosition = imgX + 'px 0'
+    }
   }, 500)
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(function (position) {
