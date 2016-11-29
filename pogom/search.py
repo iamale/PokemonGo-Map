@@ -407,7 +407,7 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
                 scheduler_array[i].schedule()
             else:
                 nextitem = search_items_queue_array[i].queue[0]
-                threadStatus['Overseer']['message'] = 'Processing search queue, next item is {:6f},{:6f}'.format(nextitem[1][0], nextitem[1][1])
+                threadStatus['Overseer']['message'] = 'Processing search queue, next item is {:6f},{:6f},{:6f}'.format(nextitem[1][0], nextitem[1][1], nextitem[1][2])
                 # If times are specified, print the time of the next queue item, and how many seconds ahead/behind realtime.
                 if nextitem[2]:
                     threadStatus['Overseer']['message'] += ' @ {}'.format(time.strftime('%H:%M:%S', time.localtime(nextitem[2])))
@@ -600,7 +600,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                             paused = True
                             break  # Why can't python just have `break 2`...
                         remain = appears - now() + 10
-                        status['message'] = 'Early for {:6f},{:6f}; waiting {}s...'.format(step_location[0], step_location[1], remain)
+                        status['message'] = 'Early for {:6f},{:6f},{:6f}; waiting {}s...'.format(step_location[0], step_location[1], step_location[2], remain)
                         if first_loop:
                             log.info(status['message'])
                             first_loop = False
@@ -616,7 +616,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                         search_items_queue.task_done()
                     status['skip'] += 1
                     # It is slightly silly to put this in status['message'] since it'll be overwritten very shortly after. Oh well.
-                    status['message'] = 'Too late for location {:6f},{:6f}; skipping'.format(step_location[0], step_location[1])
+                    status['message'] = 'Too late for location {:6f},{:6f},{:6f}; skipping'.format(step_location[0], step_location[1], step_location[2])
                     log.info(status['message'])
                     # No sleep here; we've not done anything worth sleeping for. Plus we clearly need to catch up!
                     continue
@@ -635,8 +635,6 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                 log.info(status['message'])
 
                 # Make the actual request (finally!)
-                status['message'] = 'Searching at {:6f},{:6f}'.format(step_location[0], step_location[1])
-                log.info(status['message'])
                 response_dict = map_request(api, step_location, args.jitter)
 
                 # G'damnit, nothing back. Mark it up, sleep, carry on.
@@ -644,7 +642,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                     status['fail'] += 1
                     consecutive_fails += 1
                     # consecutive_noitems = 0 - I propose to leave noitems counter in case of error
-                    status['message'] = 'Invalid response at {:6f},{:6f}, abandoning location'.format(step_location[0], step_location[1])
+                    status['message'] = 'Invalid response at {:6f},{:6f},{:6f}, abandoning location'.format(step_location[0], step_location[1], step_location[2])
                     log.error(status['message'])
                     time.sleep(args.scan_delay)
                     retry_failed_search_item = (step, step_location, appears, leaves)
@@ -694,15 +692,14 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                         status['noitems'] += 1
                         consecutive_noitems += 1
                     consecutive_fails = 0
-                    status['message'] = 'Search at {:6f},{:6f} completed with {} finds'.format(step_location[0], step_location[1], parsed['count'])
+                    status['message'] = 'Search at {:6f},{:6f},{:6f} completed with {} finds'.format(step_location[0], step_location[1], step_location[2], parsed['count'])
                     log.debug(status['message'])
-                # except KeyError as e:
                 except Exception as e:
                     parsed = False
                     status['fail'] += 1
                     consecutive_fails += 1
                     # consecutive_noitems = 0 - I propose to leave noitems counter in case of error
-                    status['message'] = 'Map parse failed at {:6f},{:6f}, abandoning location. {} may be banned.'.format(step_location[0], step_location[1], account['username'])
+                    status['message'] = 'Map parse failed at {:6f},{:6f},{:6f}, abandoning location. {} may be banned.'.format(step_location[0], step_location[1], step_location[2], account['username'])
                     log.exception('{}. Exception message: {}'.format(status['message'], e))
                     retry_failed_search_item = (step, step_location, appears, leaves)
 
@@ -738,7 +735,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                         log.debug(status['message'])
 
                         for gym in gyms_to_update.values():
-                            status['message'] = 'Getting details for gym {} of {} for location {:6f},{:6f}...'.format(current_gym, len(gyms_to_update), step_location[0], step_location[1])
+                            status['message'] = 'Getting details for gym {} of {} for location {:6f},{:6f},{:6f}...'.format(current_gym, len(gyms_to_update), step_location[0], step_location[1], step_location[2])
                             time.sleep(random.random() + 2)
                             response = gym_request(api, step_location, gym)
 
@@ -751,7 +748,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                             # Increment which gym we're on. (for status messages)
                             current_gym += 1
 
-                        status['message'] = 'Processing details of {} gyms for location {:6f},{:6f}...'.format(len(gyms_to_update), step_location[0], step_location[1])
+                        status['message'] = 'Processing details of {} gyms for location {:6f},{:6f},{:6f}...'.format(len(gyms_to_update), step_location[0], step_location[1], step_location[2])
                         log.debug(status['message'])
 
                         if gym_responses:
