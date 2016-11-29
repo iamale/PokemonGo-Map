@@ -513,9 +513,9 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
             status['location'] = False
             status['last_scan_time'] = 0
 
-            # sleep when consecutive_fails reaches max_failures, overall fails for stat purposes
+            # Sleep when consecutive_fails reaches max_failures, overall fails for stat purposes.
             consecutive_fails = 0
-            # sleep when consecutive_noitems reaches max_empty, overall noitems for stat purposes
+            # Sleep when consecutive_noitems reaches max_empty, overall noitems for stat purposes.
             consecutive_noitems = 0
             firstrun = True
 
@@ -527,7 +527,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
 
             # New account - new proxy
             if args.proxy:
-                # If proxy is not assigned yet or if proxy-rotation is defined - query for new proxy
+                # If proxy is not assigned yet or if proxy-rotation is defined - query for new proxy.
                 if (not status['proxy_url']) or \
                    ((args.proxy_rotation is not None) and (args.proxy_rotation != 'none')):
 
@@ -544,30 +544,30 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
             # The forever loop for the searches.
             while True:
 
-                while pause_bit.is_set():
-                    status['message'] = 'Scanning paused'
-                    time.sleep(2)
-
                 # If this account has been messing up too hard, let it rest
                 if (args.max_failures > 0) and (consecutive_fails >= args.max_failures):
                     status['message'] = 'Account {} failed more than {} scans; possibly bad account. Switching accounts...'.format(account['username'], args.max_failures)
                     log.warning(status['message'])
                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'failures'})
-                    break  # exit this loop to get a new account and have the API recreated
+                    break  # Exit this loop to get a new account and have the API recreated.
+
+                while pause_bit.is_set():
+                    status['message'] = 'Scanning paused'
+                    time.sleep(2)
 
                 # If this account had not find anything for too long, let it rest
                 if (args.max_empty > 0) and (consecutive_noitems >= args.max_empty):
                     status['message'] = 'Account {} returned empty scan for more than {} scans; possibly ip is banned. Switching accounts...'.format(account['username'], args.max_empty)
                     log.warning(status['message'])
                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'empty scans'})
-                    break  # exit this loop to get a new account and have the API recreated
+                    break  # Exit this loop to get a new account and have the API recreated.
 
                 # If used proxy disappears from "live list" after background checking - switch account but DO not freeze it (it's not an account failure)
                 if (args.proxy) and (not status['proxy_url'] in args.proxy):
                     status['message'] = 'Account {} proxy {} is not in a live list any more. Switching accounts...'.format(account['username'], status['proxy_url'])
                     log.warning(status['message'])
                     account_queue.put(account)  # experimantal, nobody did this before :)
-                    break  # exit this loop to get a new account and have the API recreated
+                    break  # Exit this loop to get a new account and have the API recreated.
 
                 # If this account has been running too long, let it rest
                 if (args.account_search_interval is not None):
@@ -584,11 +584,11 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                 else:
                     step, next_location, appears, leaves = retry_failed_search_item
 
-                if not firstrun:  # no need to check distance upon login
+                if not firstrun:  # No need to check speed limit upon login.
                     randomizer = random.uniform(0.7, 1)
                     sdelay = vincenty(step_location, next_location).meters / ((args.speed_limit / 3.6) * randomizer)  # Classic basic physics formula: time = distance divided by velocity (in km/hr), plus a little randomness between 70 and 100% speed.
                     status['message'] += ', sleeping {}s until {}'.format(max(sdelay, args.scan_delay), time.strftime('%H:%M:%S', time.localtime(time.time() + max(sdelay, args.scan_delay))))
-                    time.sleep(max(sdelay, args.scan_delay))  # lets sleep here for at least the scan delay time, or to keep us under the speed limiter, whichever is greatest.
+                    time.sleep(max(sdelay, args.scan_delay))  # Sleep here for at least the scan delay time, or to keep us under the speed limiter, whichever is greatest.
                 step_location = next_location
 
                 # Too soon?
@@ -672,7 +672,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                 if 'success' in response['responses']['VERIFY_CHALLENGE']:
                                     status['message'] = "Account {} successfully uncaptcha'd".format(account['username'])
                                     log.info(status['message'])
-                                    # Make another request for the same coordinate since the previous one was captcha'd
+                                    # Make another request for the same coordinate since the previous one was captcha'd.
                                     response_dict = map_request(api, step_location, args.jitter)
                                 else:
                                     status['message'] = "Account {} failed verifyChallenge, putting away account for now".format(account['username'])
@@ -698,7 +698,6 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                     parsed = False
                     status['fail'] += 1
                     consecutive_fails += 1
-                    # consecutive_noitems = 0 - I propose to leave noitems counter in case of error
                     status['message'] = 'Map parse failed at {:6f},{:6f},{:6f}, abandoning location. {} may be banned.'.format(step_location[0], step_location[1], step_location[2], account['username'])
                     log.exception('{}. Exception message: {}'.format(status['message'], e))
                     retry_failed_search_item = (step, step_location, appears, leaves)
