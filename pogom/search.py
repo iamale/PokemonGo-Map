@@ -532,7 +532,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
             else:
                 api = PGoApi()
 
-            # New account - new proxy
+            # New account - new proxy.
             if args.proxy:
                 # If proxy is not assigned yet or if proxy-rotation is defined - query for new proxy.
                 if (not status['proxy_url']) or \
@@ -551,7 +551,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
             # The forever loop for the searches.
             while True:
 
-                # If this account has been messing up too hard, let it rest
+                # If this account has been messing up too hard, let it rest.
                 if (args.max_failures > 0) and (consecutive_fails >= args.max_failures):
                     status['message'] = 'Account {} failed more than {} scans; possibly bad account. Switching accounts...'.format(account['username'], args.max_failures)
                     log.warning(status['message'])
@@ -562,21 +562,21 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                     status['message'] = 'Scanning paused'
                     time.sleep(2)
 
-                # If this account had not find anything for too long, let it rest
+                # If this account isn't finding anything for too long, let it rest.
                 if (args.max_empty > 0) and (consecutive_noitems >= args.max_empty):
                     status['message'] = 'Account {} returned empty scan for more than {} scans; possibly ip is banned. Switching accounts...'.format(account['username'], args.max_empty)
                     log.warning(status['message'])
                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'empty scans'})
                     break  # Exit this loop to get a new account and have the API recreated.
 
-                # If used proxy disappears from "live list" after background checking - switch account but DO not freeze it (it's not an account failure)
+                # If used proxy disappears from "live list" after background checking - switch account but DO not freeze it (it's not an account failure).
                 if (args.proxy) and (not status['proxy_url'] in args.proxy):
                     status['message'] = 'Account {} proxy {} is not in a live list any more. Switching accounts...'.format(account['username'], status['proxy_url'])
                     log.warning(status['message'])
                     account_queue.put(account)  # experimantal, nobody did this before :)
                     break  # Exit this loop to get a new account and have the API recreated.
 
-                # If this account has been running too long, let it rest
+                # If this account has been running too long, let it rest.
                 if (args.account_search_interval is not None):
                     if (status['starttime'] <= (now() - args.account_search_interval)):
                         status['message'] = 'Account {} is being rotated out to rest.'.format(account['username'])
@@ -634,7 +634,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                 # when the auth token is refreshed.
                 api.set_position(*step_location)
 
-                # Ok, let's get started -- check our login status
+                # Ok, let's get started - check our login status.
                 status['message'] = 'Logging in...'
                 check_login(args, account, api, step_location, status['proxy_url'])
 
@@ -642,14 +642,13 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                 status['message'] = 'Searching at {:6f},{:6f},{:6f}'.format(step_location[0], step_location[1], step_location[2])
                 log.info(status['message'])
 
-                # Make the actual request (finally!)
+                # Make the actual request (finally!).
                 response_dict = map_request(api, step_location, args.jitter)
 
                 # G'damnit, nothing back. Mark it up, sleep, carry on.
                 if not response_dict:
                     status['fail'] += 1
                     consecutive_fails += 1
-                    # consecutive_noitems = 0 - I propose to leave noitems counter in case of error
                     status['message'] = 'Invalid response at {:6f},{:6f},{:6f}, abandoning location'.format(step_location[0], step_location[1], step_location[2])
                     log.error(status['message'])
                     time.sleep(args.scan_delay)

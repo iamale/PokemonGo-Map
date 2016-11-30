@@ -24,6 +24,9 @@
 #max-empty:             # Maximum number of empty scans before an account will go into a sleep for #account-rest-interval seconds. Reasonable to use with proxies (0 to disable), (default 0)
 #min-seconds-left:      # time that must be left on a spawn before considering it too late and skipping it (default 0)
 #status-name:           # enables writing status updates to the database - if you use multiple processes, each needs a unique value
+#speed-limit:           # Maximum speed between jumps in KM/hr (default 32)
+#altitude               # Default altitude in meters. Used when GMaps Elevation API fails (default 13)
+#altitude_range:        # Additional range for --altitude in meters (default 2)
 
 #Pokemon IV 
 #encounter:             # Set to true to start encounters to pull more info, like IVs or movesets. (default false)
@@ -34,13 +37,23 @@
 # Misc
 #gmaps-key:             # your Google Maps API key
 #proxy:                 # Proxy URL e.g. socks5://127.0.0.1:9050 or a list of proxies e.g. [socks5://127.0.0.1:9050,socks5://127.0.0.1:9050]
-#proxy-timeout:         # Timeout before proceeding with next proxy while checking if the proxy works, (default 5)
-#proxy-display:         # Used with -ps, full = display complete proxy address. Index = displays just the index for that proxy (default index)
+#proxy-timeout:         # Timeout before proceeding with next proxy while checking if the proxy works (default 5)
+#proxy-display:         # Format to display used proxy. full = display complete proxy address. index = displays just the index for that proxy (default 'full').
 #proxy-file:            # Load proxy list from text file (one proxy per line), overrides #proxy
-#proxy-refresh:         # Period of proxy file reloading, in seconds. Works only with #proxy-file (0 to disable), (default 0)
-#proxy-rotation:        # Enable proxy rotation with account changing for search threads (none/round/random), (default='none')
+#proxy-refresh:         # Period of proxy file reloading, in seconds. Works only with #proxy-file (0 to disable) (default 0)
+#proxy-rotation:        # Enable proxy rotation with account changing for search threads (none/round/random) (default 'none')
 #webhook:               # webhook URL (including http://)
 #webhook-updates-only:  # only send updates to webhooks, (excludes gyms & non-lured pokéstops)
+#clean-timers-data:     # Set previous spawns as unvalid for new disappear_time prediction (default False)
+#only-unvalid:          # Skips spawnpoints with already a valid time. Use this to focus on remaining spawnpoints with unvalid time (use with --skip-empty) (default False)
+
+# Captcha Handling
+#captcha-solving:       # Enables captcha solving (default False)
+#captcha-key:           # 2Captcha API key
+#captcha-dsk:           # PokemonGo captcha data-sitekey (default '6LeeTScTAAAAADqvhqVMhPpr_vB9D364Ia-1dSgK')
+#manual-captcha-solving-domain:             # Manual captcha solving domain (default http://127.0.0.1:5000)
+#manual-captcha-solving-allowance-time:     # Manual captcha solving allowance time (default 60)
+#manual-captcha-solving-password:           # Manual captcha solving password (default '1234')
 
 # Webserver settings
 #host:                  # address to listen on (default 127.0.0.1)
