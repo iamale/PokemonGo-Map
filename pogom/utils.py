@@ -69,11 +69,11 @@ def get_args():
     parser.add_argument('-l', '--location', type=parse_unicode,
                         help='Location, can be an address or coordinates.')
     parser.add_argument('-alt', '--altitude',
-                        help='default altitude in meter',
+                        help='Default altitude in meters.',
                         type=int, default=13)
-    parser.add_argument('-altr', '--altitude_range',
-                        help='additional range for --altitude in meter',
-                        type=int, default=1)
+    parser.add_argument('-altr', '--altitude-range',
+                        help='Additional random range for --altitude in meters.',
+                        type=int, default=2)
     parser.add_argument('-j', '--jitter', help='Apply random -9m to +9m jitter to location.',
                         action='store_true', default=False)
     parser.add_argument('-st', '--step-limit', help='Steps.', type=int,
@@ -81,7 +81,7 @@ def get_args():
     parser.add_argument('-sd', '--scan-delay',
                         help='Time delay between requests in scan threads.',
                         type=float, default=10)
-    parser.add_argument('-sl', '--speed_limit',
+    parser.add_argument('-sl', '--speed-limit',
                         help='Maximum speed between jumps in KM/hr, default 32 kph',
                         type=float, default=32)
     parser.add_argument('-enc', '--encounter',
@@ -94,7 +94,7 @@ def get_args():
                         help='2Captcha API key.')
     parser.add_argument('-cds', '--captcha-dsk',
                         help='PokemonGo captcha data-sitekey.',
-                        default="6LeeTScTAAAAADqvhqVMhPpr_vB9D364Ia-1dSgK")
+                        default='6LeeTScTAAAAADqvhqVMhPpr_vB9D364Ia-1dSgK')
     parser.add_argument('-mcsd', '--manual-captcha-solving-domain',
                         help='PokemonGo manual captcha solving domain',
                         default="http://127.0.0.1:5000")
@@ -186,8 +186,8 @@ def get_args():
     parser.add_argument('-pd', '--purge-data',
                         help='Clear pokemon from database this many hours after they disappear \
                         (0 to disable)', type=int, default=0)
-    parser.add_argument('-px', '--proxy', help='Proxy url (e.g. socks5://127.0.0.1:9050)', action='append')
-    parser.add_argument('-pxsc', '--proxy-skip-check', help='Disable checking of proxies before start', action='store_true', default=False)
+    parser.add_argument('-px', '--proxy', help='Proxy url (e.g. socks5://127.0.0.1:9050).', action='append')
+    parser.add_argument('-pxsc', '--proxy-skip-check', help='Disable checking of proxies before start.', action='store_true', default=False)
     parser.add_argument('-pxt', '--proxy-timeout', help='Timeout settings for proxy checker in seconds.', type=int, default=5)
     parser.add_argument('-pxd', '--proxy-display', help='Display info on which proxy beeing used (index or full).', type=str, default='full')
     parser.add_argument('-pxf', '--proxy-file', help='Load proxy list from text file (one proxy per line), overrides -px/--proxy.')
