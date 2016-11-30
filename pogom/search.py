@@ -248,9 +248,11 @@ def worker_status_db_thread(threads_status, name, db_updates_queue):
                     'method': status['scheduler'],
                     'last_modified': datetime.utcnow()
                 }
+
             if status['type'] == 'Worker':
                 workers[status['user']] = {
                     'username': status['user'],
+                    'proxy': str(status['proxy_display']),
                     'worker_name': name,
                     'success': status['success'],
                     'fail': status['fail'],
@@ -587,7 +589,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                 if not firstrun:  # No need to check speed limit upon login.
                     randomizer = random.uniform(0.7, 1)
                     sdelay = vincenty(step_location, next_location).meters / ((args.speed_limit / 3.6) * randomizer)  # Classic basic physics formula: time = distance divided by velocity (in km/hr), plus a little randomness between 70 and 100% speed.
-                    status['message'] += ', sleeping {}s until {}'.format(max(sdelay, args.scan_delay), time.strftime('%H:%M:%S', time.localtime(time.time() + max(sdelay, args.scan_delay))))
+                    status['message'] += ', sleeping {:3f}s until {}'.format(max(sdelay, args.scan_delay), time.strftime('%H:%M:%S', time.localtime(time.time() + max(sdelay, args.scan_delay))))
                     time.sleep(max(sdelay, args.scan_delay))  # Sleep here for at least the scan delay time, or to keep us under the speed limiter, whichever is greatest.
                 step_location = next_location
 
@@ -654,6 +656,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                     if args.captcha_solving:
                         captcha_url = response_dict['responses']['CHECK_CHALLENGE']['challenge_url']
                         if len(captcha_url) > 1:
+                            status['captchas'] += 1
                             if args.captcha_key is not None:
                                 status['message'] = 'Account {} is encountering a captcha, starting 2captcha sequence'.format(account['username'])
                             else:

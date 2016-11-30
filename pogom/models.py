@@ -729,6 +729,7 @@ class WorkerStatus(BaseModel):
     no_items = IntegerField()
     skip = IntegerField()
     captchas = IntegerField()
+    proxy = CharField()
     last_modified = DateTimeField(index=True)
     message = CharField(max_length=255)
 
@@ -1408,5 +1409,6 @@ def database_migrate(db, old_ver):
     if old_ver < 10:
         migrate(
             migrator.add_column('pokemon', 'time_detail', IntegerField(default=-1)),
-            migrator.add_column('workerstatus', 'captchas', IntegerField(default=0))
+            migrator.add_column('workerstatus', 'captchas', IntegerField(default=0)),
+            migrator.add_column('workerstatus', 'proxy', CharField(null=True, default=""))
         )
