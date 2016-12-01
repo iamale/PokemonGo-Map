@@ -671,12 +671,12 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                             log.warning(status['message'])
                             captcha_token = token_request(args, status, captcha_url)
                             if 'ERROR' in captcha_token:
-                                log.warning("Unable to resolve captcha, please check your 2captcha API key and/or wallet balance")
+                                log.warning("Unable to solve captcha, please check your 2captcha API key and/or wallet balance")
                                 account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'captcha failed to verify'})
                                 retry_failed_search_item = (step, step_location, appears, leaves)
                                 break
                             elif 'TIMEOUT' in captcha_token:
-                                log.warning("Unable to resolve captcha, timed out waiting for manual captcha token.")
+                                log.warning("Unable to solve captcha, timed out waiting for manual captcha token.")
                                 account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'timed out waiting for manual captcha token'})
                                 if args.webhooks:
                                     whq.put(('captcha', {'account': status['user'], 'status': 'timeout','token_needed': token_needed}))
@@ -902,7 +902,7 @@ def token_request(args, status, url):
                 return token
             time.sleep(1)
         token_needed -= 1
-        return 'ERROR'
+        return 'TIMEOUT'
 
     s = requests.Session()
     # Fetch the CAPTCHA_ID from 2captcha.
