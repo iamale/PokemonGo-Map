@@ -104,6 +104,9 @@ def get_args():
     parser.add_argument('-mcspw', '--manual-captcha-solving-password',
                         help='PokemonGo manual captcha solving password',
                         default='1234')
+    parser.add_argument('-mcsma', '--manual-captcha-solving-max-attempts',
+                        help='Number of attempts at manual captcha solving.',
+                        type=int, default=3)
     parser.add_argument('-ed', '--encounter-delay',
                         help='Time delay between encounter pokemon in scan threads.',
                         type=float, default=1)
