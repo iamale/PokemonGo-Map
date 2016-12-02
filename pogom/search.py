@@ -668,17 +668,21 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
 
                             if (args.manual_captcha_solving_max_attempts > 0) and (captcha_attempts < args.manual_captcha_solving_max_attempts):
                                 captcha_attempts += 1
+                                captcha_time = args.manual_captcha_solving_allowance_time - 10
                                 status['message'] = 'Account {} is encountering a captcha, attempt #{} at manual captcha solving'.format(account['username'], captcha_attempts)
                                 log.warning(status['message'])
                                 if args.webhooks:
-                                    whq.put(('captcha', {'account': status['user'], 'status': 'encounter', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': args.manual_captcha_solving_allowance_time}))
+                                    whq.put(('captcha', {'account': status['user'], 'status': 'encounter', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
                                 captcha_token = token_manual_request(args)
 
-                                if 'TIMEOUT' in captcha_token:
+                                if 'ERROR' in captcha_token:
                                     status['message'] = 'Account {} manual captcha solving attempt #{} timed out. Retrying in {}s...'.format(account['username'], captcha_attempts, args.scan_delay)
                                     log.warning(status['message'])
+                                    captcha_time = args.scan_delay
+                                    if captcha_attempts >= args.manual_captcha_solving_max_attempts:
+                                        captcha_time = 0
                                     if args.webhooks:
-                                        whq.put(('captcha', {'account': status['user'], 'status': 'timeout', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts}))
+                                        whq.put(('captcha', {'account': status['user'], 'status': 'timeout', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
                                     time.sleep(args.scan_delay)
                                     retry_failed_search_item = (step, step_location, appears, leaves)
                                     continue
@@ -696,10 +700,12 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                         captcha_attempts = 0
                                     else:
                                         status['message'] = 'Account {} manual captcha solving attempt #{} failed to verify challenge. Retrying in {}s...'.format(account['username'], captcha_attempts, args.scan_delay)
-
                                         log.info(status['message'])
+                                        captcha_time = args.scan_delay
+                                        if captcha_attempts >= args.manual_captcha_solving_max_attempts:
+                                            captcha_time = 0
                                         if args.webhooks:
-                                            whq.put(('captcha', {'account': status['user'], 'status': 'failed', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts}))
+                                            whq.put(('captcha', {'account': status['user'], 'status': 'failed', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
                                         time.sleep(args.scan_delay)
                                         retry_failed_search_item = (step, step_location, appears, leaves)
                                         continue
@@ -935,7 +941,7 @@ def token_manual_request(args):
             return token
         time.sleep(1)
     token_needed -= 1
-    return 'TIMEOUT'
+    return 'ERROR'
 
 
 def token_request(args, status, url):
