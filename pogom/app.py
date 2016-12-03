@@ -45,6 +45,7 @@ class Pogom(Flask):
         return render_template('bookmarklet.html')
 
     def add_token(self):
+        args = get_args()
         password = request.args.get('password')
         token = request.args.get('token')
         if password == args.manual_captcha_solving_password:
