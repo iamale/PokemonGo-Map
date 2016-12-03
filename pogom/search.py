@@ -916,6 +916,7 @@ def gym_request(api, position, gym):
         log.warning('Exception while downloading gym details: %s', e)
         return False
 
+
 def token_manual_request(args):
     global token_needed
     request_time = datetime.utcnow()
@@ -923,18 +924,11 @@ def token_manual_request(args):
     token_needed += 1
     while request_time + timedelta(seconds=args.manual_captcha_solving_allowance_time) > datetime.utcnow():
         tokenLock.acquire()
-        if args.no_server:
-            # multiple instances, use get_token in map
-            s = requests.Session()
-            url = "{}/get_token?request_time={}&password={}".format(args.manual_captcha_solving_domain, request_time, args.manual_captcha_solving_password)
-            token = str(s.get(url).text)
+        token = Token.get_match(request_time)
+        if token is not None:
+            token = token.token
         else:
-            # single instance, get Token directly
-            token = Token.get_match(request_time)
-            if token is not None:
-                token = token.token
-            else:
-                token = ""
+            token = ""
         tokenLock.release()
         if token != "":
             token_needed -= 1
