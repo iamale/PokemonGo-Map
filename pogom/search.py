@@ -90,7 +90,7 @@ def switch_status_printer(display_type, current_page):
 
 
 # Thread to print out the status of each worker.
-def status_printer(threadStatus, search_items_queue_array, db_updates_queue, wh_queue, account_queue, account_failures):
+def status_printer(threadStatus, search_items_queue_list, db_updates_queue, wh_queue, account_queue, account_failures):
     display_type = ["workers"]
     current_page = [1]
 
@@ -129,8 +129,8 @@ def status_printer(threadStatus, search_items_queue_array, db_updates_queue, wh_
 
             # Print the queue length.
             search_items_queue_size = 0
-            for i in range(0, len(search_items_queue_array)):
-                search_items_queue_size += search_items_queue_array[i].qsize()
+            for i in range(0, len(search_items_queue_list)):
+                search_items_queue_size += search_items_queue_list[i].qsize()
 
             status_text.append('Queues: {} search items, {} db updates, {} webhook.  Total skipped items: {}. Spare accounts available: {}. Accounts on hold: {}'.format(search_items_queue_size, db_updates_queue.qsize(), wh_queue.qsize(), skip_total, account_queue.qsize(), len(account_failures)))
 
@@ -263,8 +263,8 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
 
     log.info('Search overseer starting')
 
-    search_items_queue_array = []
-    scheduler_array = []
+    search_items_queue_list = []
+    scheduler_list = []
     account_queue = Queue()
     threadStatus = {}
 
@@ -290,7 +290,7 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
         log.info('Starting status printer thread')
         t = Thread(target=status_printer,
                    name='status_printer',
-                   args=(threadStatus, search_items_queue_array, db_updates_queue, wh_queue, account_queue, account_failures))
+                   args=(threadStatus, search_items_queue_list, db_updates_queue, wh_queue, account_queue, account_failures))
         t.daemon = True
         t.start()
 
@@ -312,21 +312,39 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
     # Create the appropriate type of scheduler to handle the search queue.
     scheduler = schedulers.SchedulerFactory.get_scheduler(args.scheduler, [search_items_queue], threadStatus, args)
 
-    scheduler_array.append(scheduler)
-    search_items_queue_array.append(search_items_queue)
+    scheduler_list.append(scheduler)
+    search_items_queue_list.append(search_items_queue)
+    
+    # Create search queues.
+    num_queues = 1
+    if args.beehive > 0:
+       
+        # Calculate number of queues by leap. (1, 7, 19 <=> 1, 1+1*6, 1+1*6+2*6)
+        # -bh 2 => i:1, i:2
+        for i in range(1, args.beehive+1):
+            num_queues += i*6
+        if num_queues > args.workers:
+            log.warning('Not enough workers to fill the beehive. Increase -w --workers or decrease -bh --beehive.')
+
+        #search_items_queue_indexes = range(1, num_queues)
+        #[item for item in search_items_queue_indexes if item not in args.beehive_ignore]
+
+        for i in range(1, num_queues):
+            search_items_queue = Queue()
+            # Create the appropriate type of scheduler to handle the search queue.
+            scheduler = schedulers.SchedulerFactory.get_scheduler(args.scheduler, [search_items_queue], threadStatus, args)
+
+            scheduler_list.append(scheduler)
+            search_items_queue_list.append(search_items_queue)
 
     # Create specified number of search_worker_thread.
     log.info('Starting search worker threads')
     for i in range(0, args.workers):
         log.debug('Starting search worker thread %d', i)
-
-        if args.beehive and i > 0:
-            search_items_queue = Queue()
-            # Create the appropriate type of scheduler to handle the search queue.
-            scheduler = schedulers.SchedulerFactory.get_scheduler(args.scheduler, [search_items_queue], threadStatus, args)
-
-            scheduler_array.append(scheduler)
-            search_items_queue_array.append(search_items_queue)
+        
+        # Select search item queue for each worker.
+        search_items_queue_index = i % num_queues
+        search_items_queue = search_items_queue_list[search_items_queue_index]
 
         # Set proxy for each worker, using round robin.
         proxy_display = 'No'
@@ -372,8 +390,8 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
 
         # Wait here while scanning is paused.
         while pause_bit.is_set():
-            for i in range(0, len(scheduler_array)):
-                scheduler_array[i].scanning_paused()
+            for i in range(0, len(scheduler_list)):
+                scheduler_list[i].scanning_paused()
             time.sleep(1)
 
         # If a new location has been passed to us, get the most recent one.
@@ -390,19 +408,19 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
             if args.no_pokemon:
                 step_distance = 0.9
 
-            locations = _generate_locations(current_location, step_distance, args.step_limit, len(scheduler_array))
+            locations = _generate_locations(current_location, step_distance, args.step_limit, len(scheduler_list))
 
-            for i in range(0, len(scheduler_array)):
-                scheduler_array[i].location_changed(locations[i])
+            for i in range(0, len(scheduler_list)):
+                scheduler_list[i].location_changed(locations[i])
 
         # If there are no search_items_queue either the loop has finished (or been
         # cleared above) -- either way, time to fill it back up
-        for i in range(0, len(search_items_queue_array)):
-            if search_items_queue_array[i].empty():
+        for i in range(0, len(search_items_queue_list)):
+            if search_items_queue_list[i].empty():
                 log.debug('Search queue empty, scheduling more items to scan')
-                scheduler_array[i].schedule()
+                scheduler_list[i].schedule()
             else:
-                nextitem = search_items_queue_array[i].queue[0]
+                nextitem = search_items_queue_list[i].queue[0]
                 threadStatus['Overseer']['message'] = 'Processing search queue, next item is {:6f},{:6f}'.format(nextitem[1][0], nextitem[1][1])
                 # If times are specified, print the time of the next queue item, and how many seconds ahead/behind realtime.
                 if nextitem[2]:

@@ -65,7 +65,9 @@ def get_args():
     parser.add_argument('-ac', '--accountcsv',
                         help='Load accounts from CSV file containing "auth_service,username,passwd" lines.')
     parser.add_argument('-bh', '--beehive',
-                        help='Use beehive configuration for multiple accounts, one account per hex.  Make sure to keep -st under 5, and -w under the total amount of accounts available.', action='store_true', default=False)
+                        help='Beehive configuration - sets the number of leaps.', type=int, default=0)
+    parser.add_argument('-bhi', '--beehive-ignore',
+                        help='List of Beehive indexes to skip.', action='append', default=[])
     parser.add_argument('-l', '--location', type=parse_unicode,
                         help='Location, can be an address or coordinates.')
     parser.add_argument('-j', '--jitter', help='Apply random -9m to +9m jitter to location.',
