@@ -828,7 +828,8 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
             time.sleep(args.scan_delay)
             log.error('Exception in search_worker under account {} Exception message: {}'.format(account['username'], e))
             account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'exception'})
-            retry_failed_search_item = (step, step_location, appears, leaves)
+            if step is not None:
+                retry_failed_search_item = (step, step_location, appears, leaves)
 
 
 def check_login(args, account, api, position, proxy_url):
