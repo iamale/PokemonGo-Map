@@ -316,20 +316,36 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
     search_items_queue_list.append(search_items_queue)
     
     # Create search queues.
-    num_queues = 1
+    beehive_size = 1
     if args.beehive > 0:
-       
         # Calculate number of queues by leap. (1, 7, 19 <=> 1, 1+1*6, 1+1*6+2*6)
         # -bh 2 => i:1, i:2
         for i in range(1, args.beehive+1):
-            num_queues += i*6
-        if num_queues > args.workers:
-            log.warning('Not enough workers to fill the beehive. Increase -w --workers or decrease -bh --beehive.')
-
-        #search_items_queue_indexes = range(1, num_queues)
-        #[item for item in search_items_queue_indexes if item not in args.beehive_ignore]
-
-        for i in range(1, num_queues):
+            beehive_size += i*6
+        # Initialize list of worker distribution
+        beehive_workers = [-1 for x in range(beehive_size)]
+        beehive_ignore = []
+        beehive_total_workers = 0
+        for i in range(0, len(args.beehive_workers)):
+            bhw = args.beehive_workers[i].split('-')
+            bhw_index = bhw[0]
+            bhw_workers = bhw[1]
+            if (bhw_index >= 0) and (bhw_index <= beehive_size):
+                if bhw_workers <= 0:
+                    #beehive_size -= 1
+                    beehive_ignore.append(bhw_index)
+                    beehive_workers[bhw_index] = 0
+                else:
+                    beehive_workers[bhw_index] = bhw_workers 
+                    beehive_total_workers += bhw_workers
+        
+        #[item for item in search_items_bhw_indexes if item not in args.beehive_ignore]
+        if beehive_total_workers > args.workers:
+            log.error('Not enough workers to fill the beehive. Increase -w --workers or decrease -bh --beehive.')
+            #return # ???
+        for i in range(0, len(beehive_workers)):
+        
+        for i in range(1, beehive_size):
             search_items_queue = Queue()
             # Create the appropriate type of scheduler to handle the search queue.
             scheduler = schedulers.SchedulerFactory.get_scheduler(args.scheduler, [search_items_queue], threadStatus, args)
@@ -343,8 +359,8 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
         log.debug('Starting search worker thread %d', i)
         
         # Select search item queue for each worker.
-        search_items_queue_index = i % num_queues
-        search_items_queue = search_items_queue_list[search_items_queue_index]
+        search_items_bhw_index = i % beehive_size
+        search_items_queue = search_items_queue_list[search_items_bhw_index]
 
         # Set proxy for each worker, using round robin.
         proxy_display = 'No'
