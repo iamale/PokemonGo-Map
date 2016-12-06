@@ -10,7 +10,7 @@ import geopy
 import cluster
 from peewee import SqliteDatabase, InsertQuery, \
     IntegerField, CharField, DoubleField, BooleanField, \
-    DateTimeField, fn, DeleteQuery, CompositeKey, FloatField, TextField, SQL, JOIN
+    DateTimeField, fn, DeleteQuery, CompositeKey, FloatField, SQL, TextField, JOIN
 from playhouse.flask_utils import FlaskDB
 from playhouse.pool import PooledMySQLDatabase
 from playhouse.shortcuts import RetryOperationalError
@@ -1267,7 +1267,7 @@ def clean_db_loop(args):
             query = (Token
                      .delete()
                      .where((Token.last_updated <
-                             (datetime.utcnow() - timedelta(seconds=args.manual_captcha_solving_allowance_time)))))
+                             (datetime.utcnow() - timedelta(seconds=2*args.manual_captcha_solving_allowance_time)))))
             query.execute()
 
             # Remove active modifier from expired lured pokestops.
