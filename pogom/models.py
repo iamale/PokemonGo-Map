@@ -942,6 +942,7 @@ class WorkerStatus(BaseModel):
     fail = IntegerField()
     no_items = IntegerField()
     skip = IntegerField()
+    captchas = IntegerField()
     last_modified = DateTimeField(index=True)
     message = CharField(max_length=255)
     last_scan_date = DateTimeField(index=True)
@@ -957,6 +958,7 @@ class WorkerStatus(BaseModel):
                 'fail': status['fail'],
                 'no_items': status['noitems'],
                 'skip': status['skip'],
+                'captchas': status['captchas'],
                 'last_modified': datetime.utcnow(),
                 'message': status['message'],
                 'last_scan_date': status.get('last_scan_date', datetime.utcnow()),

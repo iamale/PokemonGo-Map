@@ -79,6 +79,9 @@ function addTable (hash) {
           Proxy
         </div>         
         <div class="status_cell">
+          Captchas
+        </div>
+        <div class="status_cell">
           Last Modified
         </div>
         <div class="status_cell">
@@ -122,13 +125,14 @@ function addWorker (mainWorkerHash, workerHash) {
   var row = `
     <div id="row_${workerHash}" class="status_row">
       <div id="username_${workerHash}" class="status_cell"/>
-      <div id="success_${workerHash}"  class="status_cell"/>
-      <div id="fail_${workerHash}"     class="status_cell"/>
-      <div id="no_items_${workerHash}"  class="status_cell"/>
-      <div id="skip_${workerHash}"     class="status_cell"/>
+      <div id="success_${workerHash}" class="status_cell"/>
+      <div id="fail_${workerHash}" class="status_cell"/>
+      <div id="no_items_${workerHash}" class="status_cell"/>
+      <div id="skip_${workerHash}" class="status_cell"/>
       <div id="proxy_${workerHash}" class="status_cell"/>      
-      <div id="lastmod_${workerHash}"  class="status_cell"/>
-      <div id="message_${workerHash}"  class="status_cell"/>
+      <div id="captchas_${workerHash}" class="status_cell"/>
+      <div id="lastmod_${workerHash}" class="status_cell"/>
+      <div id="message_${workerHash}" class="status_cell"/>
     </div>
   `
 
@@ -168,6 +172,7 @@ function processWorker (i, worker) {
   $('#fail_' + hash).html(worker['fail'])
   $('#no_items_' + hash).html(worker['no_items'])
   $('#skip_' + hash).html(worker['skip'])
+  $('#captchas_' + hash).html(worker['captchas'])
   $('#lastmod_' + hash).html(lastModified)
   $('#message_' + hash).html(worker['message'])
 }

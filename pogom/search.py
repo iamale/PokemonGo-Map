@@ -29,7 +29,7 @@ import geopy.distance
 import requests
 
 from datetime import datetime
-from threading import Thread
+from threading import Thread, Lock
 from queue import Queue, Empty
 
 from pgoapi import PGoApi
@@ -51,6 +51,8 @@ log = logging.getLogger(__name__)
 
 TIMESTAMP = '\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000'
 
+
+loginDelayLock = Lock()
 
 # Apply a location jitter.
 def jitterLocation(location=None, maxMeters=10):
@@ -167,10 +169,10 @@ def status_printer(threadStatus, search_items_queue_array, db_updates_queue, wh_
                         proxylen = max(proxylen, len(str(threadStatus[item]['proxy_display'])))
 
             # How pretty.
-            status = '{:10} | {:5} | {:' + str(userlen) + '} | {:' + str(proxylen) + '} | {:7} | {:6} | {:5} | {:7} | {:10}'
+            status = '{:10} | {:5} | {:' + str(userlen) + '} | {:' + str(proxylen) + '} | {:7} | {:6} | {:5} | {:7} | {:8} | {:10}'
 
             # Print the worker status.
-            status_text.append(status.format('Worker ID', 'Start', 'User', 'Proxy', 'Success', 'Failed', 'Empty', 'Skipped', 'Message'))
+            status_text.append(status.format('Worker ID', 'Start', 'User', 'Proxy', 'Success', 'Failed', 'Empty', 'Skipped', 'Captchas', 'Message'))
             for item in sorted(threadStatus):
                 if(threadStatus[item]['type'] == 'Worker'):
                     current_line += 1
@@ -181,7 +183,7 @@ def status_printer(threadStatus, search_items_queue_array, db_updates_queue, wh_
                     if current_line > end_line:
                         break
 
-                    status_text.append(status.format(item, time.strftime('%H:%M', time.localtime(threadStatus[item]['starttime'])), threadStatus[item]['username'], threadStatus[item]['proxy_display'], threadStatus[item]['success'], threadStatus[item]['fail'], threadStatus[item]['noitems'], threadStatus[item]['skip'], threadStatus[item]['message']))
+                    status_text.append(status.format(item, time.strftime('%H:%M', time.localtime(threadStatus[item]['starttime'])), threadStatus[item]['user'], threadStatus[item]['proxy_display'], threadStatus[item]['success'], threadStatus[item]['fail'], threadStatus[item]['noitems'], threadStatus[item]['skip'], threadStatus[item]['captchas'], threadStatus[item]['message']))
 
         elif display_type[0] == 'failedaccounts':
             status_text.append('-----------------------------------------')
@@ -329,6 +331,7 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
             'noitems': 0,
             'skip': 0,
             'username': '',
+            'captchas': 0,
             'proxy_display': proxy_display,
             'proxy_url': proxy_url
         }
@@ -476,13 +479,19 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
             status['message'] = 'Switching to account {}'.format(account['username'])
             log.info(status['message'])
 
-            stagger_thread(args, account)
+            # Delay each thread start time so that logins occur after delay.
+            loginDelayLock.acquire()
+            delay = args.login_delay + ((random.random() - .5) / 2)
+            log.debug('Delaying thread startup for %.2f seconds', delay)
+            time.sleep(delay)
+            loginDelayLock.release()
 
             # New lease of life right here.
             status['fail'] = 0
             status['success'] = 0
             status['noitems'] = 0
             status['skip'] = 0
+            status['captchas'] = 0
 
             # sleep when consecutive_fails reaches max_failures, overall fails for stat purposes
             consecutive_fails = 0
@@ -514,39 +523,38 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
 
             # The forever loop for the searches.
             while True:
-
-                while pause_bit.is_set():
-                    status['message'] = 'Scanning paused'
-                    time.sleep(2)
-
-                # If this account has been messing up too hard, let it rest
+                # If this account has been messing up too hard, let it rest.
                 if (args.max_failures > 0) and (consecutive_fails >= args.max_failures):
                     status['message'] = 'Account {} failed more than {} scans; possibly bad account. Switching accounts...'.format(account['username'], args.max_failures)
                     log.warning(status['message'])
                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'failures'})
-                    break  # exit this loop to get a new account and have the API recreated
+                    break  # exit this loop to get a new account and have the API recreated.
+                    
+                 while pause_bit.is_set():
+                    status['message'] = 'Scanning paused'
+                    time.sleep(2)
 
                 # If this account had not find anything for too long, let it rest
                 if (args.max_empty > 0) and (consecutive_noitems >= args.max_empty):
                     status['message'] = 'Account {} returned empty scan for more than {} scans; possibly ip is banned. Switching accounts...'.format(account['username'], args.max_empty)
                     log.warning(status['message'])
                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'empty scans'})
-                    break  # exit this loop to get a new account and have the API recreated
+                    break  # Exit this loop to get a new account and have the API recreated.
 
-                # If used proxy disappears from "live list" after background checking - switch account but DO not freeze it (it's not an account failure)
-                if (args.proxy) and (not status['proxy_url'] in args.proxy):
-                    status['message'] = 'Account {} proxy {} is not in a live list any more. Switching accounts...'.format(account['username'], status['proxy_url'])
-                    log.warning(status['message'])
-                    account_queue.put(account)  # experimantal, nobody did this before :)
-                    break  # exit this loop to get a new account and have the API recreated
-
-                # If this account has been running too long, let it rest
+                # If this account has been running too long, let it rest.
                 if (args.account_search_interval is not None):
                     if (status['starttime'] <= (now() - args.account_search_interval)):
                         status['message'] = 'Account {} is being rotated out to rest.'.format(account['username'])
                         log.info(status['message'])
                         account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'rest interval'})
-                        break
+                        break  # Exit this loop to get a new account and have the API recreated.
+
+                # If used proxy disappears from "live list" after background checking - switch account but do not freeze it.
+                if (args.proxy) and (not status['proxy_url'] in args.proxy):
+                    status['message'] = 'Account {} proxy {} is not in a live list any more. Switching accounts...'.format(account['username'], status['proxy_url'])
+                    log.warning(status['message'])
+                    account_queue.put(account)  # Experimantal.
+                    break  # Exit this loop to get a new account and have the API recreated.
 
                 # Grab the next thing to search (when available)
                 step, step_location, appears, leaves, messages = scheduler.next_item(status)
@@ -593,7 +601,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                 status['message'] = 'Logging in...'
                 check_login(args, account, api, step_location, status['proxy_url'])
 
-                # putting this message after the check_login so the messages aren't out of order
+                # Putting this message after the check_login so the messages aren't out of order.
                 status['message'] = messages['search']
                 log.info(status['message'])
 
@@ -851,15 +859,6 @@ def calc_distance(pos1, pos2):
     d = R * c
 
     return d
-
-
-# Delay each thread start time so that logins occur after delay.
-def stagger_thread(args, account):
-    if args.accounts.index(account) == 0:
-        return  # No need to delay the first one.
-    delay = args.accounts.index(account) * args.login_delay + ((random.random() - .5) / 2)
-    log.debug('Delaying thread startup for %.2f seconds', delay)
-    time.sleep(delay)
 
 
 class TooManyLoginAttempts(Exception):
