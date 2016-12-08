@@ -2069,3 +2069,6 @@ def database_migrate(db, old_ver):
 
         db.drop_tables([ScannedLocation])
         db.drop_tables([WorkerStatus])
+        migrate(
+            migrator.add_column('workerstatus', 'proxy', CharField(null=True, default=""))
+        )
