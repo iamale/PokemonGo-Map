@@ -523,22 +523,39 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
 
             # The forever loop for the searches.
             while True:
+
+                while pause_bit.is_set():
+                    status['message'] = 'Scanning paused'
+                    time.sleep(2)
+
                 # If this account has been messing up too hard, let it rest.
                 if (args.max_failures > 0) and (consecutive_fails >= args.max_failures):
                     status['message'] = 'Account {} failed more than {} scans; possibly bad account. Switching accounts...'.format(account['username'], args.max_failures)
                     log.warning(status['message'])
                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'failures'})
-                    break  # exit this loop to get a new account and have the API recreated.
-                    
-                 while pause_bit.is_set():
-                    status['message'] = 'Scanning paused'
-                    time.sleep(2)
+                    break  # Exit this loop to get a new account and have the API recreated.
 
-                # If this account had not find anything for too long, let it rest
+
+                # If this account had not find anything for too long, let it rest.
                 if (args.max_empty > 0) and (consecutive_noitems >= args.max_empty):
                     status['message'] = 'Account {} returned empty scan for more than {} scans; possibly ip is banned. Switching accounts...'.format(account['username'], args.max_empty)
                     log.warning(status['message'])
                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'empty scans'})
+                    break  # Exit this loop to get a new account and have the API recreated.
+
+
+                # If this account had not find anything for too long, let it rest.
+                if (args.max_empty > 0) and (consecutive_noitems >= args.max_empty):
+                    status['message'] = 'Account {} returned empty scan for more than {} scans; possibly ip is banned. Switching accounts...'.format(account['username'], args.max_empty)
+                    log.warning(status['message'])
+                    account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'empty scans'})
+                    break  # Exit this loop to get a new account and have the API recreated.
+
+                # If used proxy disappears from "live list" after background checking - switch account but DO not freeze it.
+                if (args.proxy) and (not status['proxy_url'] in args.proxy):
+                    status['message'] = 'Account {} proxy {} is not in a live list any more. Switching accounts...'.format(account['username'], status['proxy_url'])
+                    log.warning(status['message'])
+                    account_queue.put(account)  # Experimantal, nobody did this before :)
                     break  # Exit this loop to get a new account and have the API recreated.
 
                 # If this account has been running too long, let it rest.
@@ -548,13 +565,6 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                         log.info(status['message'])
                         account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'rest interval'})
                         break  # Exit this loop to get a new account and have the API recreated.
-
-                # If used proxy disappears from "live list" after background checking - switch account but do not freeze it.
-                if (args.proxy) and (not status['proxy_url'] in args.proxy):
-                    status['message'] = 'Account {} proxy {} is not in a live list any more. Switching accounts...'.format(account['username'], status['proxy_url'])
-                    log.warning(status['message'])
-                    account_queue.put(account)  # Experimantal.
-                    break  # Exit this loop to get a new account and have the API recreated.
 
                 # Grab the next thing to search (when available)
                 step, step_location, appears, leaves, messages = scheduler.next_item(status)
@@ -663,7 +673,6 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                     consecutive_fails = 0
                     status['message'] = 'Search at {:6f},{:6f} completed with {} finds'.format(step_location[0], step_location[1], parsed['count'])
                     log.debug(status['message'])
-                # except KeyError as e:
                 except Exception as e:
                     parsed = False
                     status['fail'] += 1
