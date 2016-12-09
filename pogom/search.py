@@ -461,6 +461,8 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
 
     log.debug('Search worker thread starting')
 
+    retry_failed_search_item = None
+
     # The outer forever loop restarts only when the inner one is intentionally exited - which should only be done when the worker is failing too often, and probably banned.
     # This reinitializes the API and grabs a new account from the queue.
     while True:
@@ -566,8 +568,12 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                         account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'rest interval'})
                         break  # Exit this loop to get a new account and have the API recreated.
 
-                # Grab the next thing to search (when available)
-                step, step_location, appears, leaves, messages = scheduler.next_item(status)
+                # Grab the next thing to search (when available).
+                status['message'] = 'Waiting for item from queue'
+                if retry_failed_search_item is None:
+                    step, step_location, appears, leaves, messages = scheduler.next_item(status)
+                else:
+                    step, step_location, appears, leaves, messages = retry_failed_search_item
                 status['message'] = messages['wait']
 
                 # Using step as a flag for no valid next location returned
@@ -589,12 +595,14 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                             first_loop = False
                         time.sleep(1)
                     if paused:
-                        scheduler.task_done(status)
+                        if retry_failed_search_item is None:
+                            scheduler.task_done(status)
                         continue
 
                 # Too late?
                 if leaves and now() > (leaves - args.min_seconds_left):
-                    scheduler.task_done(status)
+                    if retry_failed_search_item is None:
+                        scheduler.task_done(status)
                     status['skip'] += 1
                     # it is slightly silly to put this in status['message'] since it'll be overwritten very shortly after. Oh well.
                     status['message'] = messages['late']
@@ -631,6 +639,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                     status['message'] = messages['invalid']
                     log.error(status['message'])
                     time.sleep(scheduler.delay(status['last_scan_date']))
+                    retry_failed_search_item = (step, step_location, appears, leaves, messages)
                     continue
 
                 # Got the response, check for captcha, parse it out, then send todo's to db/wh queues.
@@ -645,6 +654,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                             if 'ERROR' in captcha_token:
                                 log.warning("Unable to resolve captcha, please check your 2captcha API key and/or wallet balance")
                                 account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'catpcha failed to verify'})
+                                retry_failed_search_item = (step, step_location, appears, leaves)
                                 break
                             else:
                                 status['message'] = 'Retrieved captcha token, attempting to verify challenge for {}'.format(account['username'])
@@ -660,10 +670,14 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                     status['message'] = "Account {} failed verifyChallenge, putting away account for now".format(account['username'])
                                     log.info(status['message'])
                                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'catpcha failed to verify'})
+                                    retry_failed_search_item = (step, step_location, appears, leaves)
                                     break
 
                     parsed = parse_map(args, response_dict, step_location, dbq, whq, api, status['last_scan_date'])
-                    scheduler.task_done(status, parsed)
+                    if retry_failed_search_item is None:
+                        scheduler.task_done(status, parsed)
+                    retry_failed_search_item = None
+
                     if parsed['count'] > 0:
                         status['success'] += 1
                         consecutive_noitems = 0
@@ -680,6 +694,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                     # consecutive_noitems = 0 - I propose to leave noitems counter in case of error
                     status['message'] = 'Map parse failed at {:6f},{:6f}, abandoning location. {} may be banned.'.format(step_location[0], step_location[1], account['username'])
                     log.exception('{}. Exception message: {}'.format(status['message'], e))
+                    retry_failed_search_item = (step, step_location, appears, leaves, messages)
 
                 # Get detailed information about gyms.
                 if args.gym_info and parsed:
@@ -745,6 +760,8 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
             traceback.print_exc(file=sys.stdout)
             account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'exception'})
             time.sleep(args.scan_delay)
+            if step is not None:
+                retry_failed_search_item = (step, step_location, appears, leaves, messages)
 
 
 def check_login(args, account, api, position, proxy_url):
