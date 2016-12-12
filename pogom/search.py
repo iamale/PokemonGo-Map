@@ -624,6 +624,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                 if leaves and now() > (leaves - args.min_seconds_left):
                     if retry_failed_search_item is None:
                         search_items_queue.task_done()
+                    retry_failed_search_item = None
                     status['skip'] += 1
                     # It is slightly silly to put this in status['message'] since it'll be overwritten very shortly after. Oh well.
                     status['message'] = 'Too late for location {:6f},{:6f},{:6f}; skipping'.format(step_location[0], step_location[1], step_location[2])
@@ -750,6 +751,9 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                     if parsed['count'] > 0:
                         status['success'] += 1
                         consecutive_noitems = 0
+                    elif parsed['nearby']:
+                         status['success'] += 1
+                         consecutive_empties = 0
                     else:
                         status['noitems'] += 1
                         consecutive_noitems += 1
