@@ -2,12 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Pokémon Go Map - Bookmarklet</title>
+    <title>PoGoTuga Map - Bookmarklet</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dist/css/app.min.css').lstrip('/') }}">
 </head>
-<body>
+<body style="padding:20px">
+    <div id="instructions">
+        <h3>Não guardar esta página nos <i>Bookmarks</i></h3>
+        <p>A página a guardar nos marcadores/<i>bookmarks</i> é o <i>link</i> que se encontra abaixo - <strong>Solve Recaptcha</strong>.<br>Podem arrastar o <i>link</i> diretamente para a barra de atalhos do <i>browser</i>.</p>
+        <p>Verifiquem que o URL do marcador começa com <code>javascript:(...)</code>.</p>
+    </div>
 <script>
-
-document.write("<a href=\"javascript:(function(){if(window.location.href!='http://pgorelease.nianticlabs.com/'){window.location.href='http://pgorelease.nianticlabs.com/'}else{document.getElementsByTagName('head')[0].appendChild(document.createElement('script')).src='{{domain}}/inject.js?'+Math.random();}}());\">Solve Recaptcha</a>")
+document.write("<a href=\"javascript:(function(){if(window.location.href!='http://pgorelease.nianticlabs.com/'){window.location.href='http://pgorelease.nianticlabs.com/'}else{document.getElementsByTagName('head')[0].appendChild(document.createElement('script')).src='{{domain}}/inject.js?'+Math.random();}}());\" style=\"font-size:1.3em\">Solve Recaptcha</a>")
 </script>
 </body>
 </html>

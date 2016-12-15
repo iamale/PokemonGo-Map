@@ -947,7 +947,7 @@ def token_request(args, status, url):
     s = requests.Session()
     # Fetch the CAPTCHA_ID from 2captcha.
     try:
-        captcha_id = s.post("http://2captcha.com/in.php?key={}&method=userrecaptcha&googlekey={}&pageurl={}".format(args.captcha_key, args.captcha_dsk, url)).text.split('|')[1]
+        captcha_id = s.post("http://2captcha.com/in.php?key={}&soft_id=1634&method=userrecaptcha&googlekey={}&pageurl={}".format(args.captcha_key, args.captcha_dsk, url)).text.split('|')[1]
         captcha_id = str(captcha_id)
     # IndexError implies that the retuned response was a 2captcha error.
     except IndexError:
