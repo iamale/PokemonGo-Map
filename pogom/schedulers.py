@@ -453,6 +453,8 @@ class SpawnScan(BaseScheduler):
 # After finishing the spawnpoint search or if timing isn't right for any of the remaining search bands,
 # workers will search the nearest scan location that has a new spawn.
 class SpeedScan(HexSearch):
+    elevation = False
+    altitude = 0
 
     # Call base initialization, set step_distance
     def __init__(self, queues, status, args):
@@ -571,7 +573,28 @@ class SpeedScan(HexSearch):
                 loc = get_new_coords(loc, xdist, WEST)
                 results.append((loc[0], loc[1], 0))
 
-        return [(step, (location[0], location[1], 0), 0, 0) for step, location in enumerate(results)]
+        locationsZeroed = []
+        for step, location in enumerate(results, 1):
+            if SpeedScan.elevation:
+                altitude = SpeedScan.altitude
+            else:
+                try:
+                    r_session = requests.Session()
+                    response = r_session.get("https://maps.googleapis.com/maps/api/elevation/json?locations={},{}&key={}".format(location[0], location[1], self.gmaps))
+                    response = response.json()
+                    altitude = response["results"][0]["elevation"]
+                    SpeedScan.elevation = True
+                    SpeedScan.altitude = altitude
+                except:
+                    altitude = self.altitude_default
+            if self.altitude_range > 0:
+                altitude = altitude + random.randrange(-1 * self.altitude_range, self.altitude_range) + float(format(random.random(), '.13f'))
+            else:
+                altitude = altitude + float(format(random.random(), '.13f'))
+
+            locationsZeroed.append((step, (location[0], location[1], altitude), 0, 0))
+
+        return locationsZeroed
 
     def getsize(self):
         return len(self.queues[0])

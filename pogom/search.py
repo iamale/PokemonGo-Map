@@ -687,14 +687,14 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                         scheduler.task_done(status, parsed)
                     retry_failed_search_item = None
                     consecutive_fails = 0
-                    status['message'] = 'Search at {:6f},{:6f} completed with {} finds'.format(step_location[0], step_location[1], parsed['count'])
+                    status['message'] = 'Search at {:6f},{:6f},{:6f} completed with {} finds'.format(step_location[0], step_location[1], step_location[2], parsed['count'])
                     log.debug(status['message'])
                 except Exception as e:
                     parsed = False
                     status['fail'] += 1
                     consecutive_fails += 1
                     # consecutive_noitems = 0 - I propose to leave noitems counter in case of error
-                    status['message'] = 'Map parse failed at {:6f},{:6f}, abandoning location. {} may be banned.'.format(step_location[0], step_location[1], account['username'])
+                    status['message'] = 'Map parse failed at {:6f},{:6f},{:6f}, abandoning location. {} may be banned.'.format(step_location[0], step_location[1], step_location[2], account['username'])
                     log.exception('{}. Exception message: {}'.format(status['message'], e))
                     retry_failed_search_item = (step, step_location, appears, leaves, messages)
 
@@ -730,7 +730,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                         log.debug(status['message'])
 
                         for gym in gyms_to_update.values():
-                            status['message'] = 'Getting details for gym {} of {} for location {:6f},{:6f}...'.format(current_gym, len(gyms_to_update), step_location[0], step_location[1])
+                            status['message'] = 'Getting details for gym {} of {} for location {:6f},{:6f},{:6f}...'.format(current_gym, len(gyms_to_update), step_location[0], step_location[1], step_location[2])
                             time.sleep(random.random() + 2)
                             response = gym_request(api, step_location, gym)
 
@@ -743,7 +743,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                             # Increment which gym we're on. (for status messages)
                             current_gym += 1
 
-                        status['message'] = 'Processing details of {} gyms for location {:6f},{:6f}...'.format(len(gyms_to_update), step_location[0], step_location[1])
+                        status['message'] = 'Processing details of {} gyms for location {:6f},{:6f},{:6f}...'.format(len(gyms_to_update), step_location[0], step_location[1], step_location[2])
                         log.debug(status['message'])
 
                         if gym_responses:
