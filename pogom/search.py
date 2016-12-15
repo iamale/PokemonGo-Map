@@ -923,6 +923,7 @@ def token_manual_request(args):
     token_needed += 1
     while request_time + timedelta(seconds=args.manual_captcha_solving_allowance_time) > datetime.utcnow():
         tokenLock.acquire()
+        '''
         if args.no_server:
             # multiple instances, use get_token in map
             s = requests.Session()
@@ -935,6 +936,12 @@ def token_manual_request(args):
                 token = token.token
             else:
                 token = ""
+        '''
+        token = Token.get_match(request_time)
+        if token is not None:
+            token = token.token
+        else:
+            token = ""
         tokenLock.release()
         if token != "":
             token_needed -= 1
