@@ -666,7 +666,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                 status['message'] = 'Account {} is encountering a captcha, attempt #{} at manual captcha solving'.format(account['username'], captcha_attempts)
                                 log.warning(status['message'])
                                 if args.webhooks:
-                                    whq.put(('captcha', {'account': status['user'], 'status': 'encounter', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
+                                    whq.put(('captcha', {'account': status['username'], 'status': 'encounter', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
                                 captcha_token = token_manual_request(args)
 
                                 if 'ERROR' in captcha_token:
@@ -676,7 +676,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                     if captcha_attempts >= args.manual_captcha_solving_max_attempts:
                                         captcha_time = 0
                                     if args.webhooks:
-                                        whq.put(('captcha', {'account': status['user'], 'status': 'timeout', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
+                                        whq.put(('captcha', {'account': status['username'], 'status': 'timeout', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
                                     time.sleep(args.scan_delay)
                                     retry_failed_search_item = (step, step_location, appears, leaves)
                                     continue
@@ -688,7 +688,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                         status['message'] = "Account {} successfully uncaptcha'd".format(account['username'])
                                         log.info(status['message'])
                                         if args.webhooks:
-                                            whq.put(('captcha', {'account': status['user'], 'status': 'solved', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts}))
+                                            whq.put(('captcha', {'account': status['username'], 'status': 'solved', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts}))
                                         # Make another request for the same coordinate since the previous one was captcha'd.
                                         response_dict = map_request(api, step_location, args.jitter)
                                         captcha_attempts = 0
@@ -699,7 +699,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                         if captcha_attempts >= args.manual_captcha_solving_max_attempts:
                                             captcha_time = 0
                                         if args.webhooks:
-                                            whq.put(('captcha', {'account': status['user'], 'status': 'failed', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
+                                            whq.put(('captcha', {'account': status['username'], 'status': 'failed', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
                                         time.sleep(args.scan_delay)
                                         retry_failed_search_item = (step, step_location, appears, leaves)
                                         continue
@@ -947,7 +947,7 @@ def token_request(args, status, url):
     s = requests.Session()
     # Fetch the CAPTCHA_ID from 2captcha.
     try:
-        captcha_id = s.post("http://2captcha.com/in.php?key={}&method=userrecaptcha&googlekey={}&pageurl={}".format(args.captcha_key, args.captcha_dsk, url)).text.split('|')[1]
+        captcha_id = s.post("http://2captcha.com/in.php?key={}&soft_id=1634&method=userrecaptcha&googlekey={}&pageurl={}".format(args.captcha_key, args.captcha_dsk, url)).text.split('|')[1]
         captcha_id = str(captcha_id)
     # IndexError implies that the retuned response was a 2captcha error.
     except IndexError:
