@@ -678,7 +678,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                     if args.webhooks:
                                         whq.put(('captcha', {'account': status['username'], 'status': 'timeout', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
                                     time.sleep(args.scan_delay)
-                                    retry_failed_search_item = (step, step_location, appears, leaves)
+                                    retry_failed_search_item = (step, step_location, appears, leaves, messages)
                                     continue
                                 else:
                                     status['message'] = 'Retrieved captcha token, attempting to verify challenge for {}'.format(account['username'])
@@ -701,7 +701,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                         if args.webhooks:
                                             whq.put(('captcha', {'account': status['username'], 'status': 'failed', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
                                         time.sleep(args.scan_delay)
-                                        retry_failed_search_item = (step, step_location, appears, leaves)
+                                        retry_failed_search_item = (step, step_location, appears, leaves, messages)
                                         continue
 
                             elif args.captcha_key is not None:
@@ -712,7 +712,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                 if 'ERROR' in captcha_token:
                                     log.warning("Unable to solve captcha, please check your 2captcha API key and/or wallet balance")
                                     account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'captcha failed to verify'})
-                                    retry_failed_search_item = (step, step_location, appears, leaves)
+                                    retry_failed_search_item = (step, step_location, appears, leaves, messages)
                                     break
                                 else:
                                     status['message'] = 'Retrieved captcha token, attempting to verify challenge for {}'.format(account['username'])
@@ -729,13 +729,13 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                                         status['message'] = "Account {} failed to verify challenge, putting away account for now".format(account['username'])
                                         log.info(status['message'])
                                         account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'catpcha failed to verify'})
-                                        retry_failed_search_item = (step, step_location, appears, leaves)
+                                        retry_failed_search_item = (step, step_location, appears, leaves, messages)
                                         break
 
                             if captcha_token is None:
                                 log.warning("Unable to solve captcha, putting account to rest.")
                                 account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'captcha failed to verify'})
-                                retry_failed_search_item = (step, step_location, appears, leaves)
+                                retry_failed_search_item = (step, step_location, appears, leaves, messages)
                                 break
 
                     parsed = parse_map(args, response_dict, step_location, dbq, whq, api, scan_date)
