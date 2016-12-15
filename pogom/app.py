@@ -44,7 +44,10 @@ class Pogom(Flask):
         self.route("/bookmarklet", methods=['GET'])(self.get_bookmarklet)
 
     def get_bookmarklet(self):
-        return render_template('bookmarklet.html')
+        args = get_args()
+        return render_template("bookmarklet.html",
+                               domain=args.manual_captcha_solving_domain
+                               )
 
     def get_token(self):
         request_time = request.args.get('request_time')

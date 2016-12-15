@@ -505,6 +505,9 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
             # sleep when consecutive_noitems reaches max_empty, overall noitems for stat purposes
             consecutive_noitems = 0
 
+            # Give up manual captcha solving when captcha_attempts reaches manual_captcha_solving_max_attempts
+            captcha_attempts = 0
+
             # Create the API instance this will use.
             if args.mock != '':
                 api = FakePogoApi(args.mock)
@@ -607,6 +610,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                 if leaves and now() > (leaves - args.min_seconds_left):
                     if retry_failed_search_item is None:
                         scheduler.task_done(status)
+                    retry_failed_search_item = None
                     status['skip'] += 1
                     # it is slightly silly to put this in status['message'] since it'll be overwritten very shortly after. Oh well.
                     status['message'] = messages['late']
@@ -653,34 +657,86 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                     if args.captcha_solving:
                         captcha_url = response_dict['responses']['CHECK_CHALLENGE']['challenge_url']
                         if len(captcha_url) > 1:
-                            if args.captcha_key is not None:
-                                status['message'] = 'Account {} is encountering a captcha, starting 2captcha sequence'.format(account['username'])
-                            else:
-                                status['message'] = 'Account {} is encountering a captcha, starting manual captcha solving'.format(account['username'])
-                            log.warning(status['message'])
-                            captcha_token = token_request(args, status, captcha_url, whq)
-                            if 'ERROR' in captcha_token:
-                                log.warning("Unable to resolve captcha, please check your 2captcha API key and/or wallet balance")
-                                account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'catpcha failed to verify'})
-                                retry_failed_search_item = (step, step_location, appears, leaves)
-                                break
-                            else:
-                                status['message'] = 'Retrieved captcha token, attempting to verify challenge for {}'.format(account['username'])
-                                log.info(status['message'])
-                                response = api.verify_challenge(token=captcha_token)
-                                if 'success' in response['responses']['VERIFY_CHALLENGE']:
-                                    status['message'] = "Account {} successfully uncaptcha'd".format(account['username'])
-                                    log.info(status['message'])
-                                    scan_date = datetime.utcnow()
-                                    # Make another request for the same coordinate since the previous one was captcha'd
-                                    response_dict = map_request(api, step_location, args.jitter)
-                                    status['last_scan_date'] = datetime.utcnow()
+                            status['captchas'] += 1
+                            captcha_token = None
+
+                            if (args.manual_captcha_solving_max_attempts > 0) and (captcha_attempts < args.manual_captcha_solving_max_attempts):
+                                captcha_attempts += 1
+                                captcha_time = args.manual_captcha_solving_allowance_time - 10
+                                status['message'] = 'Account {} is encountering a captcha, attempt #{} at manual captcha solving'.format(account['username'], captcha_attempts)
+                                log.warning(status['message'])
+                                if args.webhooks:
+                                    whq.put(('captcha', {'account': status['user'], 'status': 'encounter', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
+                                captcha_token = token_manual_request(args)
+
+                                if 'ERROR' in captcha_token:
+                                    status['message'] = 'Account {} manual captcha solving attempt #{} timed out. Retrying in {}s...'.format(account['username'], captcha_attempts, args.scan_delay)
+                                    log.warning(status['message'])
+                                    captcha_time = args.scan_delay
+                                    if captcha_attempts >= args.manual_captcha_solving_max_attempts:
+                                        captcha_time = 0
+                                    if args.webhooks:
+                                        whq.put(('captcha', {'account': status['user'], 'status': 'timeout', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
+                                    time.sleep(args.scan_delay)
+                                    retry_failed_search_item = (step, step_location, appears, leaves)
+                                    continue
                                 else:
-                                    status['message'] = "Account {} failed verifyChallenge, putting away account for now".format(account['username'])
+                                    status['message'] = 'Retrieved captcha token, attempting to verify challenge for {}'.format(account['username'])
                                     log.info(status['message'])
-                                    account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'catpcha failed to verify'})
+                                    response = api.verify_challenge(token=captcha_token)
+                                    if 'success' in response['responses']['VERIFY_CHALLENGE']:
+                                        status['message'] = "Account {} successfully uncaptcha'd".format(account['username'])
+                                        log.info(status['message'])
+                                        if args.webhooks:
+                                            whq.put(('captcha', {'account': status['user'], 'status': 'solved', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts}))
+                                        # Make another request for the same coordinate since the previous one was captcha'd.
+                                        response_dict = map_request(api, step_location, args.jitter)
+                                        captcha_attempts = 0
+                                    else:
+                                        status['message'] = 'Account {} manual captcha solving attempt #{} failed to verify challenge. Retrying in {}s...'.format(account['username'], captcha_attempts, args.scan_delay)
+                                        log.info(status['message'])
+                                        captcha_time = args.scan_delay
+                                        if captcha_attempts >= args.manual_captcha_solving_max_attempts:
+                                            captcha_time = 0
+                                        if args.webhooks:
+                                            whq.put(('captcha', {'account': status['user'], 'status': 'failed', 'token_needed': token_needed, 'status_name': args.status_name, 'attempts': captcha_attempts, 'time': captcha_time}))
+                                        time.sleep(args.scan_delay)
+                                        retry_failed_search_item = (step, step_location, appears, leaves)
+                                        continue
+
+                            elif args.captcha_key is not None:
+                                status['message'] = 'Account {} is encountering a captcha, starting 2captcha sequence'.format(account['username'])
+                                log.warning(status['message'])
+                                captcha_token = token_request(args, status, captcha_url)
+
+                                if 'ERROR' in captcha_token:
+                                    log.warning("Unable to solve captcha, please check your 2captcha API key and/or wallet balance")
+                                    account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'captcha failed to verify'})
                                     retry_failed_search_item = (step, step_location, appears, leaves)
                                     break
+                                else:
+                                    status['message'] = 'Retrieved captcha token, attempting to verify challenge for {}'.format(account['username'])
+                                    log.info(status['message'])
+                                    response = api.verify_challenge(token=captcha_token)
+                                    if 'success' in response['responses']['VERIFY_CHALLENGE']:
+                                        status['message'] = "Account {} successfully uncaptcha'd".format(account['username'])
+                                        log.info(status['message'])
+                                        scan_date = datetime.utcnow()
+                                        # Make another request for the same coordinate since the previous one was captcha'd
+                                        response_dict = map_request(api, step_location, args.jitter)
+                                        status['last_scan_date'] = datetime.utcnow()
+                                    else:
+                                        status['message'] = "Account {} failed to verify challenge, putting away account for now".format(account['username'])
+                                        log.info(status['message'])
+                                        account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'catpcha failed to verify'})
+                                        retry_failed_search_item = (step, step_location, appears, leaves)
+                                        break
+
+                            if captcha_token is None:
+                                log.warning("Unable to solve captcha, putting account to rest.")
+                                account_failures.append({'account': account, 'last_fail_time': now(), 'reason': 'captcha failed to verify'})
+                                retry_failed_search_item = (step, step_location, appears, leaves)
+                                break
 
                     parsed = parse_map(args, response_dict, step_location, dbq, whq, api, scan_date)
                     if parsed['count'] > 0:
@@ -859,41 +915,35 @@ def gym_request(api, position, gym):
         return False
 
 
-def token_request(args, status, url, whq):
+def token_manual_request(args):
 
     global token_needed
     request_time = datetime.utcnow()
 
-    if args.captcha_key is None:
-        token_needed += 1
-        if args.webhooks:
-            whq.put(('token_needed', {"num": token_needed}))
-        while request_time + timedelta(seconds=args.manual_captcha_solving_allowance_time) > datetime.utcnow():
-            tokenLock.acquire()
-            if args.no_server:
-                # multiple instances, use get_token in map
-                s = requests.Session()
-                url = "{}/get_token?request_time={}&password={}".format(args.manual_captcha_solving_domain, request_time, args.manual_captcha_solving_password)
-                token = str(s.get(url).text)
+    token_needed += 1
+    while request_time + timedelta(seconds=args.manual_captcha_solving_allowance_time) > datetime.utcnow():
+        tokenLock.acquire()
+        if args.no_server:
+            # multiple instances, use get_token in map
+            s = requests.Session()
+            url = "{}/get_token?request_time={}&password={}".format(args.manual_captcha_solving_domain, request_time, args.manual_captcha_solving_password)
+            token = str(s.get(url).text)
+        else:
+            # single instance, get Token directly
+            token = Token.get_match(request_time)
+            if token is not None:
+                token = token.token
             else:
-                # single instance, get Token directly
-                token = Token.get_match(request_time)
-                if token is not None:
-                    token = token.token
-                else:
-                    token = ""
-            tokenLock.release()
-            if token != "":
-                token_needed -= 1
-                if args.webhooks:
-                    whq.put(('token_needed', {"num": token_needed}))
-                return token
-            time.sleep(1)
-        token_needed -= 1
-        if args.webhooks:
-            whq.put(('token_needed', {"num": token_needed}))
-        return 'ERROR'
+                token = ""
+        tokenLock.release()
+        if token != "":
+            token_needed -= 1
+            return token
+        time.sleep(1)
+    token_needed -= 1
+    return 'ERROR'
 
+def token_request(args, status, url):
     s = requests.Session()
     # Fetch the CAPTCHA_ID from 2captcha.
     try:
