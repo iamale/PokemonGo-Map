@@ -59,7 +59,7 @@ function loadRawData () {
 function addTable (hash) {
   var table = `
     <div class="status_table" id="table_${hash}">
-      <div class="status_row header">    
+      <div class="status_row header">
         <div class="status_cell">
           Username
         </div>
@@ -76,10 +76,10 @@ function addTable (hash) {
           Skipped
         </div>
         <div class="status_cell">
-          Proxy
-        </div>         
-        <div class="status_cell">
           Captchas
+        </div>
+        <div class="status_cell">
+          Proxy
         </div>
         <div class="status_cell">
           Last Modified
@@ -129,8 +129,8 @@ function addWorker (mainWorkerHash, workerHash) {
       <div id="fail_${workerHash}" class="status_cell"/>
       <div id="no_items_${workerHash}" class="status_cell"/>
       <div id="skip_${workerHash}" class="status_cell"/>
-      <div id="proxy_${workerHash}" class="status_cell"/>      
       <div id="captchas_${workerHash}" class="status_cell"/>
+      <div id="proxy_${workerHash}" class="status_cell"/>
       <div id="lastmod_${workerHash}" class="status_cell"/>
       <div id="message_${workerHash}" class="status_cell"/>
     </div>
